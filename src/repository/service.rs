@@ -14,6 +14,8 @@ pub enum Cmd {
     UpdateFileHeader(Uuid, Uuid, u32, RepositoryFile),
     UpdateFileContent(Uuid, Uuid, Vec<u8>),
     UpdateFile(Uuid, Uuid, u32, RepositoryFile, Vec<u8>),
+
+    Shutdown,
 }
 
 #[derive(Debug, Clone)]
@@ -26,25 +28,25 @@ pub enum Response {
 
     NoSuchFile,
     RepositoryClosed,
+    ShutdownSuccessful,
 }
 
 #[derive(Debug)]
 pub struct RepositoryService {
-    running: Arc<AtomicBool>,
-
     receiver: Receiver<(Sender<Response>, Cmd)>,
     sender: Sender<(Sender<Response>, Cmd)>,
 }
 
 #[derive(Debug)]
 pub struct RepositoryAccess {
-    running: Arc<AtomicBool>,
     sender: Sender<(Sender<Response>, Cmd)>,
 }
 
 impl RepositoryAccess {
     pub fn stop(&mut self) {
-        self.running.store(false, Ordering::Relaxed);
+        let (s1, r1) = channel();
+        self.sender.send((s1,Cmd::Shutdown));
+        r1.recv();//wait for shutdown
     }
 
     pub fn get_sender(&mut self) -> Sender<(Sender<Response>, Cmd)> {
@@ -55,16 +57,16 @@ impl RepositoryAccess {
 impl RepositoryService {
     pub fn new() -> (Self, RepositoryAccess) {
         let (sender, receiver) = channel();
-        let running = Arc::new(AtomicBool::new(true));
-        let service = RepositoryService { sender: sender.clone(), receiver: receiver, running: running.clone() };
-        let stopper = RepositoryAccess { running: running, sender: sender.clone() };
+        let service = RepositoryService { sender: sender.clone(), receiver: receiver };
+        let stopper = RepositoryAccess { sender: sender.clone() };
         (service, stopper)
     }
 
     pub fn work_loop(&self) {
         println!("Starting work loop");
-        while self.running.load(Ordering::Relaxed) {
-            let result = self.receiver.recv_timeout(Duration::from_secs(1));
+        let mut shutdown= false;
+        while !shutdown {
+            let result = self.receiver.recv();
             if result.is_ok() {
                 let (sender, cmd) = result.unwrap();
                 println!("Received command {:?}", cmd);
@@ -74,8 +76,14 @@ impl RepositoryService {
                         let id = Uuid::new_v4();
                         sender.send(Response::CreatedRepository(id, name.clone())).unwrap()
                     }
+                    Cmd::Shutdown => {
+                        shutdown=true;
+                        sender.send(Response::ShutdownSuccessful).unwrap()
+                    },
                     _ => sender.send(Response::RepositoryClosed).unwrap(),
                 };
+            } else {
+                return;
             }
         }
     }

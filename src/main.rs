@@ -64,6 +64,9 @@ fn tryservice() {
 }
 
 fn main() {
+    tryservice();
+
+
     let state = dummy::new_dummy_data();
 
     let r = rocket::ignite();
