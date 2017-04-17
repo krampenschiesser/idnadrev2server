@@ -1,0 +1,6 @@
+[global.tls]
+certs = "localhost.crt"
+key = "localhost.key"
+
+[development]
+ui_dir = "/home/scar/WebstormProjects/idnadrev2ui/build"

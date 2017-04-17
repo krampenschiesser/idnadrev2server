@@ -1,0 +1,20 @@
+[package]
+name = "idnadrev2rust"
+version = "0.1.0"
+authors = ["krampenschiesser <krampenschiesser@gmail.com>"]
+
+[dependencies]
+#rocket = { version = "*", features = ["tls"]}
+rocket = "0.2.4"
+rocket_codegen = "0.2.4"
+rocket_contrib = {version = "0.2.4", default-features=true, features=["uuid"]}
+serde = "0.9"
+serde_json = "0.9"
+serde_derive = "0.9"
+ring = "*"
+uuid = { version= "0.4.0", features = ["v4", "serde", "rustc-serialize"]}
+chrono = { version = "0.3", features = ["serde", "rustc-serialize"] }
+
+
+[dev-dependencies]
+rocket = { version = "*", features = ["testing"] }
