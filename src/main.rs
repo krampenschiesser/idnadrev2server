@@ -15,6 +15,7 @@ mod rest;
 mod repository;
 mod state;
 mod dummy;
+mod actor;
 
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
