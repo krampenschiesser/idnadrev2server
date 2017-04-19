@@ -3,13 +3,11 @@ extern crate chrono;
 extern crate serde;
 extern crate serde_json;
 
-mod crypt;
 pub mod service;
 
 use uuid::Uuid;
 use std::collections::HashMap;
 use chrono::{DateTime, UTC};
-use self::crypt::{FileHeader, RepoHeader};
 use std::fmt::Display;
 use std::fmt;
 

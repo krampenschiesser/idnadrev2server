@@ -12,6 +12,8 @@ serde = "0.9"
 serde_json = "0.9"
 serde_derive = "0.9"
 ring = "*"
+ring-pwhash = "0.1.2"
+byteorder = { version = "1", features =["std"]}
 uuid = { version= "0.4.0", features = ["v4", "serde", "rustc-serialize"]}
 chrono = { version = "0.3", features = ["serde", "rustc-serialize"] }
 
