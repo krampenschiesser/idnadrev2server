@@ -45,8 +45,8 @@ impl<Command, Response> ActorControl<Command, Response>
 
 impl<Command, Response, State> Actor<Command, Response, State>
     where
-        Command: Clone + Eq + Debug + PartialEq + Send,
-        Response: Clone + Eq + Debug + PartialEq + Send,
+        Command: Clone + Eq + Debug,
+        Response: Clone + Eq + Debug,
 {
     pub fn start(state: State, handler: fn(Command, &mut State) -> Result<Response, String>, shutdown_command: Command) -> (Actor<Command, Response, State>, ActorControl<Command, Response>) {
         let (sender, receiver) = channel();
@@ -92,7 +92,7 @@ mod tests {
 
     #[derive(Clone, Eq, PartialEq, Debug)]
     enum TestResponse {
-        World(String),
+        World { content: String },
         DidShtdown,
     }
 
@@ -106,7 +106,7 @@ mod tests {
             state.counter = state.counter + 1;
         }
         match cmd {
-            TestCmd::Hello => Ok(TestResponse::World(format!("Count: {}", state.counter))),
+            TestCmd::Hello => Ok(TestResponse::World { content: format!("Count: {}", state.counter) }),
             _ => Err("No known command!".to_string()),
         }
     }
@@ -118,7 +118,7 @@ mod tests {
         let (mut actor, control) = Actor::start(state, handle, TestCmd::Shutdown);
         thread::spawn(move || actor.run());
         let resp = control.send_sync(TestCmd::Hello).unwrap().unwrap();
-        assert_eq!(TestResponse::World("Count: 1".to_string()), resp);
+        assert_eq!(TestResponse::World{content: "Count: 1".to_string()}, resp);
         control.stop();
     }
 }

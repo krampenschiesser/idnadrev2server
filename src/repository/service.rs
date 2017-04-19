@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use actor::{Actor, ActorControl};
+
 #[derive(Debug, Clone)]
 pub enum Cmd {
     CreateRepository(String),
@@ -45,7 +47,7 @@ pub struct RepositoryAccess {
 impl RepositoryAccess {
     pub fn stop(&mut self) {
         let (s1, r1) = channel();
-        self.sender.send((s1,Cmd::Shutdown));
+        self.sender.send((s1, Cmd::Shutdown));
         r1.recv();//wait for shutdown
     }
 
@@ -64,7 +66,7 @@ impl RepositoryService {
 
     pub fn work_loop(&self) {
         println!("Starting work loop");
-        let mut shutdown= false;
+        let mut shutdown = false;
         while !shutdown {
             let result = self.receiver.recv();
             if result.is_ok() {
@@ -77,9 +79,9 @@ impl RepositoryService {
                         sender.send(Response::CreatedRepository(id, name.clone())).unwrap()
                     }
                     Cmd::Shutdown => {
-                        shutdown=true;
+                        shutdown = true;
                         sender.send(Response::ShutdownSuccessful).unwrap()
-                    },
+                    }
                     _ => sender.send(Response::RepositoryClosed).unwrap(),
                 };
             } else {
