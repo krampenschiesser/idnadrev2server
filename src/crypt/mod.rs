@@ -5,6 +5,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
 use rand::Rng;
 
+mod io;
 pub mod serialize;
 
 #[derive(Debug, Eq, PartialEq, Clone)]

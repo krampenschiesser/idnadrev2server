@@ -12,6 +12,8 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate byteorder;
 extern crate rand;
+extern crate ring;
+extern crate base64;
 
 mod crypt;
 mod rest;
