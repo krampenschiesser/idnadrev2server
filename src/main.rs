@@ -14,6 +14,7 @@ extern crate byteorder;
 extern crate rand;
 extern crate ring;
 extern crate base64;
+extern crate tempdir;
 
 mod crypt;
 mod rest;
