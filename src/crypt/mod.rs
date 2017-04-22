@@ -6,6 +6,7 @@ use rand::os::OsRng;
 use rand::Rng;
 
 mod io;
+mod crypt;
 pub mod serialize;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -28,7 +29,7 @@ pub enum EncryptionType {
 pub enum PasswordHashType {
     None,
     Argon2i { iterations: u16, memory_costs: u16, parallelism: u16 },
-    SCrypt { iterations: u16, memory_costs: u16, parallelism: u16 },
+    SCrypt { iterations: u8, memory_costs: u32, parallelism: u32 },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -91,6 +92,14 @@ impl EncryptionType {
             EncryptionType::None => 0,
         }
     }
+
+    pub fn hash_len(&self) -> usize {
+        match *self {
+            EncryptionType::RingAESGCM => 16,
+            EncryptionType::RingChachaPoly1305 => 16,
+            EncryptionType::None => 0,
+        }
+    }
 }
 
 impl MainHeader {
@@ -103,7 +112,7 @@ impl MainHeader {
 impl RepoHeader {
     pub fn new_default_random() -> Self {
         let mut rng = OsRng::new().unwrap();
-        let it = rng.gen_range(1000, 30000);
+        let it = rng.gen_range(100, 255);
         let mem = rng.gen_range(1024, 8192);
         let cpu = rng.gen_range(4, 64);
         let kdf = PasswordHashType::SCrypt { iterations: it, memory_costs: mem, parallelism: cpu };

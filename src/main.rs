@@ -13,6 +13,7 @@ extern crate serde_derive;
 extern crate byteorder;
 extern crate rand;
 extern crate ring;
+extern crate ring_pwhash;
 extern crate base64;
 extern crate tempdir;
 

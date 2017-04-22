@@ -75,9 +75,9 @@ impl ByteSerialization for PasswordHashType {
             }
             PasswordHashType::SCrypt { iterations, memory_costs, parallelism } => {
                 vec.push(2u8);
-                vec.write_u16::<LittleEndian>(iterations);
-                vec.write_u16::<LittleEndian>(memory_costs);
-                vec.write_u16::<LittleEndian>(parallelism);
+                vec.write_u8(iterations);
+                vec.write_u32::<LittleEndian>(memory_costs);
+                vec.write_u32::<LittleEndian>(parallelism);
             }
         };
     }
@@ -95,9 +95,9 @@ impl ByteSerialization for PasswordHashType {
                 Ok(PasswordHashType::Argon2i { iterations: iterations, memory_costs: mem, parallelism: cpu })
             }
             2 => {
-                let iterations = read_u16(input)?;
-                let mem = read_u16(input)?;
-                let cpu = read_u16(input)?;
+                let iterations = read_u8(input)?;
+                let mem = read_u32(input)?;
+                let cpu = read_u32(input)?;
                 Ok(PasswordHashType::SCrypt { iterations: iterations, memory_costs: mem, parallelism: cpu })
             }
             _ => Err(ParseError::WrongValue(pos))
@@ -107,7 +107,7 @@ impl ByteSerialization for PasswordHashType {
         match *self {
             PasswordHashType::None => 1,
             PasswordHashType::Argon2i { .. } => 1 + 2 * 3,
-            PasswordHashType::SCrypt { .. } => 1 + 2 * 3,
+            PasswordHashType::SCrypt { .. } => 1 + 1 + 2 * 4,
         }
     }
 }
@@ -283,7 +283,7 @@ mod tests {
         let mut result = Vec::new();
         pwh.to_bytes(&mut result);
 
-        assert_eq!(7, result.len());
+        assert_eq!(10, result.len());
         let pwh2 = PasswordHashType::from_bytes(&mut Cursor::new(result.as_slice())).unwrap();
         assert_eq!(pwh, pwh2);
     }
@@ -302,7 +302,7 @@ mod tests {
         let enc_type_len = 1;
         assert_eq!(enc_type_len, h.encryption_type.byte_len());
 
-        let kdf_len = 1 + 3 * 2;
+        let kdf_len = 1 + 1 + 2 * 4;
         assert_eq!(kdf_len, h.password_hash_type.byte_len());
 
         let salt_len_field = 1;

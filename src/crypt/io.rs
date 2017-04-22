@@ -155,7 +155,6 @@ mod tests {
             let mut c = Vec::new();
             header.to_bytes(&mut c);
             let b64 = encode(c.as_slice());
-            println!("{}", b64);
             f.write_all(b64.as_bytes()).unwrap();
         }
         let res = check_file_prefix("4711", &dir, true, false);
