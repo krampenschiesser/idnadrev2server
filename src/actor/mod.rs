@@ -70,8 +70,8 @@ impl<Command, Response, State> Actor<Command, Response, State>
                     return
                 }
 
-                let bla = self.handler;
-                let resp = bla(cmd, &mut self.state);
+                let handle = self.handler;
+                let resp = handle(cmd, &mut self.state);
                 sender.send(resp);
             } else {
                 return;

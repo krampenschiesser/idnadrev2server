@@ -1,10 +1,14 @@
 use uuid::Uuid;
 use std::path::PathBuf;
-use std::fs::File;
+use std::fs::{File, DirEntry};
 use super::*;
 use super::serialize::ByteSerialization;
 use base64::{encode, decode};
 use std::io::{Read, Write};
+use std::io;
+use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher};
+use std::sync::mpsc::{channel, Receiver};
+use std::time::Duration;
 
 #[derive(Debug, Eq, PartialEq)]
 enum Error {
@@ -14,14 +18,129 @@ enum Error {
     IOError,
     ParseError(super::ParseError),
 }
+impl From<io::Error> for Error {
+    fn from(a: io::Error) -> Self {
+        Error::IOError
+    }
+}
 
-pub fn save_file(encryption_header: FileHeader, plain_header: &str, plain_content: &[u8], pw: &[u8], ) {}
+impl From<ParseError> for Error {
+    fn from(e: ParseError) -> Self {
+        Error::ParseError(e)
+    }
+}
 
-pub fn save_file_header(encryption_header: FileHeader, plain_header: &str, pw: &[u8]) {}
+//#[derive(Debug)] not possible due to file watcher
+pub struct ScanResult {
+    repositories: Vec<(RepoHeader, PathBuf)>,
+    files: Vec<(FileHeader, PathBuf)>,
+    invalid: Vec<(Error, PathBuf)>,
+    watcher: RecommendedWatcher,
+    file_change_receiver: Receiver<DebouncedEvent>,
+}
 
-pub fn save_file_content(encryption_header: FileHeader, plain_content: &[u8], pw: &[u8]) {}
+#[derive(Debug)]
+pub enum CheckRes {
+    Repo(RepoHeader, PathBuf),
+    File(FileHeader, PathBuf),
+    Error(Error, PathBuf),
+}
 
-fn check_newfile(id: Uuid, version: u32, file: File) {}
+impl ScanResult {
+    fn new(watcher: RecommendedWatcher, file_change_receiver: Receiver<DebouncedEvent>) -> Self {
+        ScanResult { repositories: Vec::new(), files: Vec::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver }
+    }
+}
+
+pub fn scan(folders: Vec<PathBuf>) -> Result<ScanResult, ()> {
+    let (tx, rx) = channel();
+    let mut watcher = watcher(tx, Duration::from_secs(10)).map_err(|e| ())?;
+    for path in &folders {
+        watcher.watch(path, RecursiveMode::Recursive).map_err(|e| ())?;
+    }
+
+    let check_results: Vec<CheckRes> = folders.into_iter().flat_map(|p| scan_folder(p)).collect();
+    let mut s = ScanResult::new(watcher, rx);
+    for i in check_results {
+        match i {
+            CheckRes::Repo(h, p) => s.repositories.push((h, p)),
+            CheckRes::File(h, p) => s.files.push((h, p)),
+            CheckRes::Error(e, p) => s.invalid.push((e, p)),
+        };
+    }
+    Ok(s)
+}
+
+pub fn scan_folder(folder: PathBuf) -> Vec<CheckRes> {
+    match folder.read_dir() {
+        Err(_) => Vec::new(),
+        Ok(file_iter) => {
+            let results: Vec<CheckRes> = file_iter.map(|file| check_map_file(file)).filter(|r| r.is_ok()).map(|r| r.unwrap()).collect();
+            results
+        }
+    }
+}
+
+fn check_map_file(dir_entry: Result<DirEntry, io::Error>) -> Result<CheckRes, ()> {
+    if dir_entry.is_err() {
+        return Err(());
+    }
+    let path = dir_entry.unwrap().path();
+    let ext = path.extension();
+    let is_json_file = match ext {
+        Some(extension) => extension == ".json",
+        _ => false,
+    };
+
+    let result = if is_json_file {
+        check_json_file(&path)
+    } else {
+        check_bin_file(&path)
+    };
+
+    let val = match result {
+        Ok(header) => {
+            match header.file_version {
+                FileVersion::FileV1 => {
+                    match read_file_header(&path) {
+                        Err(e) => CheckRes::Error(e, path.clone()),
+                        Ok(f) => CheckRes::File(f, path.clone()),
+                    }
+                }
+                FileVersion::RepositoryV1 => {
+                    match read_repo_header(&path) {
+                        Err(e) => CheckRes::Error(e, path.clone()),
+                        Ok(r) => CheckRes::Repo(r, path.clone()),
+                    }
+                }
+            }
+        }
+        Err(error) => {
+            CheckRes::Error(error, path.clone())
+        }
+    };
+    Ok(val)
+}
+
+fn read_file_header(path: &PathBuf) -> Result<FileHeader, Error> {
+    let f = File::open(path)?;
+    let mut v = Vec::new();
+    f.take(1000).read_to_end(&mut v)?;
+    let mut cursor = Cursor::new(v.as_slice());
+    let header = FileHeader::from_bytes(&mut cursor)?;
+    Ok(header)
+}
+
+
+fn read_repo_header(path: &PathBuf) -> Result<RepoHeader, Error> {
+    let f = File::open(path)?;
+    let mut v = Vec::new();
+    f.take(1000).read_to_end(&mut v)?;
+    let mut cursor = Cursor::new(v.as_slice());
+    let header= RepoHeader::from_bytes(&mut cursor)?;
+    Ok(header)
+}
+
 
 fn check_plain_files_not_exist(id: &str, folder: &PathBuf) -> Result<(), Error> {
     check_file_not_exists(format!("{}.json", id).as_str(), folder)?;
@@ -50,24 +169,35 @@ fn check_file_exists(id: &str, folder: &PathBuf) -> Result<(), Error> {
     Ok(())
 }
 
-fn check_file_prefix(id: &str, folder: &PathBuf, plain_files: bool, check_new: bool) -> Result<MainHeader, Error> {
+fn check_file_prefix(id: &str, folder: &PathBuf, plain_files: bool) -> Result<MainHeader, Error> {
     if plain_files {
-        let file = File::open(folder.join(format!("{}.json", id))).map_err(|e| Error::IOError)?;
-        let b64_len = 32;
-        let mut file = file.take(b64_len);
-        let mut content = String::new();
-        file.read_to_string(&mut content).map_err(|e| Error::IOError)?;
-        let decode = decode(&content).map_err(|e| Error::WrongPrefix)?;
-        let mut cursor = Cursor::new(decode.as_slice());
-        MainHeader::from_bytes(&mut cursor).map_err(|e| Error::ParseError(e))
+        check_json_file(&folder.join(format!("{}.json", id)))
     } else {
-        let header_length = 23;
-        let file = File::open(folder.join(id)).map_err(|e| Error::IOError)?;
-        let mut file = file.take(header_length);
-        let mut header_content = Vec::new();
-        file.read_to_end(&mut header_content).map_err(|e| Error::IOError)?;
-        MainHeader::from_bytes(&mut Cursor::new(header_content.as_slice())).map_err(|e| Error::ParseError(e))
+        let path = folder.join(id);
+        check_bin_file(&path)
     }
+}
+
+fn check_bin_file(path: &PathBuf) -> Result<MainHeader, Error> {
+    let file = File::open(path)?;
+    let header_length = 23;
+    let mut file = file.take(header_length);
+    let mut header_content = Vec::new();
+    file.read_to_end(&mut header_content)?;
+    let h = MainHeader::from_bytes(&mut Cursor::new(header_content.as_slice()))?;
+    Ok(h)
+}
+
+fn check_json_file(path: &PathBuf) -> Result<MainHeader, Error> {
+    let file = File::open(path)?;
+    let b64_len = 32;
+    let mut file = file.take(b64_len);
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
+    let decode = decode(&content).map_err(|e| Error::WrongPrefix)?;
+    let mut cursor = Cursor::new(decode.as_slice());
+    let h = MainHeader::from_bytes(&mut cursor)?;
+    Ok(h)
 }
 
 fn path_to_str(path: &PathBuf) -> String {
@@ -127,7 +257,7 @@ mod tests {
             header.to_bytes(&mut c);
             f.write_all(c.as_slice()).unwrap();
         }
-        let res = check_file_prefix("4711", &dir, false, false);
+        let res = check_file_prefix("4711", &dir, false);
         assert_eq!(Ok(header), res);
     }
 
@@ -142,7 +272,7 @@ mod tests {
             c[0] = 0xAA;
             f.write_all(c.as_slice()).unwrap();
         }
-        let res = check_file_prefix("4711", &dir, false, false);
+        let res = check_file_prefix("4711", &dir, false);
         assert_eq!(Err(Error::ParseError(ParseError::NoPrefix)), res);
     }
 
@@ -157,7 +287,7 @@ mod tests {
             let b64 = encode(c.as_slice());
             f.write_all(b64.as_bytes()).unwrap();
         }
-        let res = check_file_prefix("4711", &dir, true, false);
+        let res = check_file_prefix("4711", &dir, true);
         assert_eq!(Ok(header), res);
     }
 
@@ -169,10 +299,10 @@ mod tests {
             let mut f = File::create(&dir.join("4711.json")).unwrap();
             let mut c = Vec::new();
             header.to_bytes(&mut c);
-            let mut b64 = encode(c.as_slice()).replace("vq","ee");
+            let mut b64 = encode(c.as_slice()).replace("vq", "ee");
             f.write_all(b64.as_bytes()).unwrap();
         }
-        let res = check_file_prefix("4711", &dir, true, false);
+        let res = check_file_prefix("4711", &dir, true);
         assert_eq!(Err(Error::ParseError(ParseError::NoPrefix)), res);
     }
 }

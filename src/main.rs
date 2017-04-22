@@ -16,6 +16,7 @@ extern crate ring;
 extern crate ring_pwhash;
 extern crate base64;
 extern crate tempdir;
+extern crate notify;
 
 mod crypt;
 mod rest;

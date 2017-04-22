@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{Cursor, Read};
+use std::path::PathBuf;
 use uuid::Uuid;
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
@@ -7,6 +8,7 @@ use rand::Rng;
 
 mod io;
 mod crypt;
+pub mod actor;
 pub mod serialize;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -54,6 +56,12 @@ pub struct RepoHeader {
     pub salt: Vec<u8>,
 }
 
+pub struct Repository {
+    header: RepoHeader,
+    name: String,
+    path: PathBuf,
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct FileHeader {
     main_header: MainHeader,
@@ -64,6 +72,13 @@ pub struct FileHeader {
     header_length: u32,
     nonce_header: Vec<u8>,
     nonce_content: Vec<u8>,
+}
+
+pub struct EncryptedFile {
+    encryption_header: FileHeader,
+    header: String,
+    content: Option<Vec<u8>>,
+    path: PathBuf,
 }
 
 impl PasswordHashType {
