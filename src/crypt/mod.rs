@@ -6,6 +6,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
 use rand::Rng;
 use std;
+use crypt::serialize::ByteSerialization;
 
 mod io;
 mod crypt;
@@ -79,11 +80,12 @@ pub struct FileHeader {
     nonce_content: Vec<u8>,
 }
 
+#[derive(Debug, Clone)]
 pub struct EncryptedFile {
     encryption_header: FileHeader,
     header: String,
     content: Option<Vec<u8>>,
-    path: PathBuf,
+    path: Option<PathBuf>,
 }
 
 impl PasswordHashType {
@@ -135,9 +137,9 @@ impl RepoHeader {
         let it = rng.gen_range(1, 5);
         let mem = rng.gen_range(1024, 4096);
         let cpu = 1;//rng.gen_range(1, 4);
-//        let it=16;
-//        let mem = 8;
-//        let cpu=1;
+        //        let it=16;
+        //        let mem = 8;
+        //        let cpu=1;
         let kdf = PasswordHashType::SCrypt { iterations: it, memory_costs: mem, parallelism: cpu };
         RepoHeader::new(kdf, EncryptionType::RingChachaPoly1305)
     }
@@ -159,6 +161,38 @@ impl FileHeader {
         let nc = random_vec(enc_type.nonce_len());
         let nh = random_vec(enc_type.nonce_len());
         FileHeader { main_header: mh, repository_id: repository.main_header.id, encryption_type: enc_type, nonce_content: nc, nonce_header: nh, header_length: 0 }
+    }
+
+    pub fn get_id(&self) -> Uuid {
+        self.main_header.id.clone()
+    }
+    pub fn get_repository_id(&self) -> Uuid {
+        self.repository_id.clone()
+    }
+
+    pub fn set_header_length(&mut self, length: u32) {
+        self.header_length = length;
+    }
+
+    pub fn get_additional_data(&self) -> Vec<u8> {
+        let mut v = Vec::new();
+        self.main_header.to_bytes(&mut v);
+        v
+    }
+}
+
+impl EncryptedFile {
+    pub fn new(enc_header: FileHeader, header: &str) -> Self {
+        EncryptedFile { path: None, content: None, encryption_header: enc_header, header: header.into() }
+    }
+    pub fn with_content(enc_header: FileHeader, header: &str, content: &[u8]) -> Self {
+        let mut f = EncryptedFile::new(enc_header, header);
+        f.content = Some(content.to_vec());
+        f
+    }
+
+    pub fn set_path(&mut self, path: &PathBuf) {
+        self.path = Some(path.clone());
     }
 }
 

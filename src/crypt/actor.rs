@@ -1,5 +1,5 @@
 use super::super::actor::{Actor, ActorControl};
-use super::{RepoHeader};
+use super::{RepoHeader, Repository};
 use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ pub struct FileHeader {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Repository {
+pub struct RepositoryDescriptor {
     id: Uuid,
     name: String,
 }
@@ -53,7 +53,7 @@ pub enum CryptResponse {
     FileContent(FileHeader, Vec<u8>),
     Files(Vec<FileHeader>),
 
-    Repositories(Repository),
+    Repositories(RepositoryDescriptor),
 
     RepositoryOpened { id: Uuid },
     RepositoryOpenFailed { id: Uuid },
@@ -73,7 +73,7 @@ struct FileState {
 struct RepositoryState {
     files: HashMap<Uuid, FileState>,
     key: Vec<u8>,
-    header: RepoHeader,
+    repo: Repository,
 }
 
 struct State {
@@ -102,9 +102,7 @@ impl State {
 }
 
 
-impl RepositoryState {
-    //    fn new(header: RepoHeader, pw: &[u8], files: Vec<FileDescriptor>) -> Self {}
-}
+impl RepositoryState {}
 
 fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
     match &cmd {
@@ -117,8 +115,9 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
     let existing = state.repositories.get(&id);
     if existing.is_some() {
         let existing = existing.unwrap();
-        let ref pwh = existing.header.password_hash_type;
-        let hashed = pwh.hash(pw, existing.header.encryption_type.key_len());
+        let ref header = existing.repo.header;
+        let ref pwh = header.password_hash_type;
+        let hashed = pwh.hash(pw, header.encryption_type.key_len());
 
         let matching = verify_slices_are_equal(hashed.as_slice(), existing.key.as_slice());
         match matching {
@@ -130,6 +129,8 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
         match option {
             Some(repo) => {
                 if repo.check_pw(pw) {
+//                    let repostate = create_repository_state(pw, repo, &state.scan_result);
+//                    state.repositories.insert(id.clone(), repostate);
                     Ok(CryptResponse::RepositoryOpened { id: id.clone() })
                 } else {
                     Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
@@ -139,6 +140,11 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
         }
     }
 }
+
+//fn create_repository_state(pw: &[u8], repo: Repository, scan_result: &ScanResult) -> RepositoryState {
+//    let to_load = scan_result.get_files_for_repo(&repo.get_id());
+//
+//}
 
 #[cfg(test)]
 mod tests {
@@ -186,5 +192,7 @@ mod tests {
 
         let response = open_repository(&id, pw_wrong, &mut state).unwrap();
         assert_eq!(CryptResponse::RepositoryOpenFailed { id: id }, response);
+
+        let state = state;
     }
 }

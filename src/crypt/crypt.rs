@@ -6,13 +6,13 @@ use std::time::{Instant};
 use chrono::Duration;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-enum CryptError {
+pub enum CryptError {
     KeyFailure,
     DecryptFailue,
     EncryptFailue,
 }
 
-fn encrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
+pub fn encrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
     let alg = enctype.algorithm();
     match alg {
         None => Ok(data.to_vec()),
@@ -26,7 +26,7 @@ fn encrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8],
     }
 }
 
-fn decrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
+pub fn decrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
     let alg = enctype.algorithm();
     match alg {
         None => Ok(data.to_vec()),
@@ -34,7 +34,8 @@ fn decrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8],
             let key = OpeningKey::new(a, key_data).map_err(|e| CryptError::KeyFailure)?;
             let mut ciphertext = data.to_vec();
             open_in_place(&key, nonce, additional, 0, ciphertext.as_mut_slice()).map_err(|e| CryptError::DecryptFailue)?;
-            ciphertext.resize(enctype.hash_len(), 0);
+            let content_length = ciphertext.len() - enctype.hash_len();
+            ciphertext.resize(content_length, 0);
             Ok(ciphertext)
         }
     }

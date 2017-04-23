@@ -1,6 +1,6 @@
 use uuid::Uuid;
 use std::path::PathBuf;
-use std::fs::{File, DirEntry};
+use std::fs::{File, DirEntry, rename, remove_file};
 use super::*;
 use super::serialize::ByteSerialization;
 use base64::{encode, decode};
@@ -10,20 +10,30 @@ use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher
 use notify;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
+use std::string::FromUtf8Error;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
     FileAlreadyExists(String),
     FileDoesNotExist(String),
     WrongPrefix,
-    IOError,
+    IOError(String),
     ParseError(super::ParseError),
     WatcherCreationError,
+    CryptError(super::crypt::CryptError),
+    NoFilePath,
+    NoFileContent,
 }
 
 impl From<io::Error> for Error {
     fn from(a: io::Error) -> Self {
-        Error::IOError
+        Error::IOError(format!("{:?}", a))
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(a: FromUtf8Error) -> Self {
+        Error::ParseError(ParseError::InvalidUtf8)
     }
 }
 
@@ -37,6 +47,16 @@ impl From<notify::Error> for Error {
     fn from(e: notify::Error) -> Self {
         Error::WatcherCreationError
     }
+}
+
+impl From<super::crypt::CryptError> for Error {
+    fn from(e: super::crypt::CryptError) -> Self {
+        Error::CryptError(e)
+    }
+}
+
+pub struct TempFile {
+    path: PathBuf
 }
 
 //#[derive(Debug)] not possible due to file watcher
@@ -77,6 +97,28 @@ impl ScanResult {
             None => None,
         }
     }
+
+    pub fn get_files_for_repo(&self, repo_id: &Uuid) -> Vec<(FileHeader, PathBuf)> {
+        self.files.iter().filter(|ref t| t.0.get_repository_id() == *repo_id).map(|e| e.clone()).collect()
+    }
+}
+
+impl TempFile {
+    fn new() -> Self {
+        let tempdir = std::env::temp_dir();
+        let name = format!("{}", Uuid::new_v4().simple());
+        TempFile { path: tempdir.join(name) }
+    }
+
+    fn new_in_path(path: PathBuf) -> Self {
+        TempFile { path: path }
+    }
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        remove_file(self.path.clone());
+    }
 }
 
 impl Repository {
@@ -89,6 +131,74 @@ impl Repository {
         let mut repo = Repository::from_bytes(&mut c)?;
         repo.path = Some(path);
         Ok(repo)
+    }
+}
+
+impl EncryptedFile {
+    pub fn load_head(header: &FileHeader, key: &[u8], path: &PathBuf) -> Result<Self, Error> {
+        let mut f = File::open(path.clone())?;
+        let mut f = f.take(header.byte_len() as u64 + header.header_length as u64);
+        let mut v = Vec::new();
+        f.read_to_end(&mut v)?;
+        let mut c = Cursor::new(v.as_slice());
+
+        let mut additional = header.get_additional_data();
+        c.set_position(header.byte_len() as u64);
+
+        let mut buff = vec![0u8; header.header_length as usize];
+        c.read_exact(buff.as_mut_slice())?;
+
+        let plaintext = crypt::decrypt(&header.encryption_type, &header.nonce_header, key, buff.as_slice(), additional.as_slice())?;
+
+        let plaintext = String::from_utf8(plaintext)?;
+
+        let result = EncryptedFile { encryption_header: header.clone(), path: Some(path.clone()), content: None, header: plaintext };
+        Ok(result)
+    }
+
+    pub fn load_content(header: &FileHeader, key: &[u8], path: &PathBuf) -> Result<Vec<u8>, Error> {
+        let mut f = File::open(path.clone())?;
+        let mut v = Vec::new();
+        f.read_to_end(&mut v)?;
+        let mut c = Cursor::new(v.as_slice());
+
+        let mut additional = header.get_additional_data();
+        c.set_position(header.byte_len() as u64 + header.header_length as u64);
+
+        let mut buff = Vec::new();
+        c.read_to_end(&mut buff);
+
+        let plaintext = crypt::decrypt(&header.encryption_type, &header.nonce_content, key, buff.as_slice(), additional.as_slice())?;
+        Ok(plaintext)
+    }
+
+    pub fn save(&mut self, key: &[u8]) -> Result<(), Error> {
+        let path = self.path.as_ref().ok_or(Error::NoFilePath)?;
+        let content = self.content.as_ref().ok_or(Error::NoFileContent)?;
+
+        let mut additional = self.encryption_header.get_additional_data();
+
+        let ref mut header = self.encryption_header;
+
+        let encryptedheadertext = crypt::encrypt(&header.encryption_type, header.nonce_header.as_slice(), key, self.header.as_bytes(), additional.as_slice())?;
+        header.set_header_length(encryptedheadertext.len() as u32);
+        let encryptedcontent = crypt::encrypt(&header.encryption_type, header.nonce_content.as_slice(), key, content, additional.as_slice())?;
+
+        let mut header_bytes = Vec::new();
+        header.to_bytes(&mut header_bytes);
+
+        let temp = TempFile::new();
+        {
+            let mut tempfile = File::create(temp.path.clone())?;
+            tempfile.write(header_bytes.as_slice())?;
+            tempfile.write(encryptedheadertext.as_slice())?;
+            tempfile.write(encryptedcontent.as_slice())?;
+            tempfile.sync_all()?;
+        }
+
+        rename(temp.path.clone(), path)?;
+
+        Ok(())
     }
 }
 
@@ -398,5 +508,27 @@ mod tests {
             _ => false
         }).unwrap();
         assert_eq!(dir.join("errorfile"), error.get_path());
+    }
+
+    #[test]
+    fn encrypted_file() {
+        let tempdir = TempDir::new("scanfolder").unwrap();
+        let dir = tempdir.path();
+
+        let repo = RepoHeader::new_default_random();
+        let pw = repo.password_hash_type.hash("password".as_bytes(), repo.encryption_type.key_len());
+
+        let mut encrypted_file = EncryptedFile::with_content( FileHeader::new(&repo), "header", "content".as_bytes());
+        {
+            encrypted_file.set_path(&dir.join("myfile"));
+            encrypted_file.save(pw.as_slice()).unwrap();
+        }
+        let ref header = encrypted_file.encryption_header;
+        let path = encrypted_file.path.as_ref().unwrap();
+        let reloaded = EncryptedFile::load_head(header, pw.as_slice(), path).unwrap();
+        let content = EncryptedFile::load_content(header, pw.as_slice(), path).unwrap();
+        let contenttext = String::from_utf8(content).unwrap();
+        assert_eq!("content", contenttext);
+        assert_eq!("header", reloaded.header);
     }
 }
