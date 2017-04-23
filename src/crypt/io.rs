@@ -7,7 +7,6 @@ use base64::{encode, decode};
 use std::io::{Read, Write};
 use std::io;
 use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher};
-use notify;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 use super::crypt::HashedPw;

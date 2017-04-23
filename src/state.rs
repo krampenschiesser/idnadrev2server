@@ -1,4 +1,4 @@
-use repository::{Repository, RepositoryFile};
+use repository::{Repository};
 use uuid::Uuid;
 use std::collections::HashMap;
 

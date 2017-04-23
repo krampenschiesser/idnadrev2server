@@ -17,6 +17,10 @@ extern crate ring_pwhash;
 extern crate base64;
 extern crate tempdir;
 extern crate notify;
+#[macro_use]
+extern crate log;
+extern crate log4rs;
+
 
 mod crypt;
 mod rest;
@@ -26,7 +30,7 @@ mod dummy;
 mod actor;
 
 use std::sync::{Arc, RwLock};
-use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{channel};
 use std::path::{PathBuf};
 use rocket::config::{self, ConfigError};
 use std::thread;
@@ -73,6 +77,11 @@ fn tryservice() {
 }
 
 fn main() {
+    log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
+    info!("Starting up!");
+    trace!("Tracing");
+    error!("Error!");
+    warn!("Warning");
     tryservice();
 
 

@@ -1,6 +1,5 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
-use std::thread::JoinHandle;
 use std::clone::Clone;
 use std::error::Error;
 use std::fmt::Debug;

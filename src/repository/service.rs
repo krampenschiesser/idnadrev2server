@@ -1,11 +1,6 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{RwLock, Arc};
 use uuid::Uuid;
-use std::thread;
-use repository::{Repository, RepositoryFile};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use repository::{RepositoryFile};
 
 use actor::{Actor, ActorControl};
 
@@ -47,8 +42,17 @@ pub struct RepositoryAccess {
 impl RepositoryAccess {
     pub fn stop(&mut self) {
         let (s1, r1) = channel();
-        self.sender.send((s1, Cmd::Shutdown));
-        r1.recv();//wait for shutdown
+        match self.sender.send((s1, Cmd::Shutdown)) {
+            Ok(_) => {
+                match r1.recv() {
+                    Ok(_) => debug!("Successfully shutdown repository access"),
+                    Err(e) => warn!("Could not shutdown repostiroy access, received no ack"),
+                };
+            },
+            Err(e) => {
+                warn!("Could not shutdown repostiroy access, could not send stop");
+            }
+        }
     }
 
     pub fn get_sender(&mut self) -> Sender<(Sender<Response>, Cmd)> {

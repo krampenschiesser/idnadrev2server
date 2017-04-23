@@ -1,6 +1,5 @@
 use std::io;
-use std::path::{Path, PathBuf};
-use rocket::config::{self, ConfigError};
+use std::path::{PathBuf};
 use rocket::response::NamedFile;
 use rocket::State;
 

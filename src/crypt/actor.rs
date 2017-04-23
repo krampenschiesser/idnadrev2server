@@ -193,14 +193,6 @@ mod tests {
         (tempdir, repo, pw_hash)
     }
 
-    use std::mem::size_of;
-
-    #[test]
-    fn bla() {
-        let v = size_of::<usize>() * 8;
-        println!("{}", v);
-    }
-
     #[test]
     fn open_repo() {
         let (temp, repo, pw) = create_temp_repo();

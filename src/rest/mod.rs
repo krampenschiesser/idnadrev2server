@@ -1,18 +1,14 @@
 extern crate uuid;
 extern crate rocket_contrib;
 
-use uuid::Uuid;
 use rocket_contrib::UUID;
 use state::{RepositoryState, RepoNamesDTO};
 use repository::{RepositoryFile, Repository};
 use rocket::State;
 use rocket::response::Stream;
-use rocket_contrib::{JSON, Value};
-use std::collections::HashMap;
+use rocket_contrib::{JSON};
 use std::io::Cursor;
-use std::clone::Clone;
 use std::sync::{RwLock,Arc};
-use std::thread;
 
 pub mod ui;
 

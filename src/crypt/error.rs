@@ -1,6 +1,5 @@
 use std;
 use std::io;
-use std::str::Utf8Error;
 use std::string::FromUtf8Error;
 use std::fmt::{Display,Formatter};
 use std::fmt;

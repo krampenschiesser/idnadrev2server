@@ -1,8 +1,6 @@
 use std::io::{Cursor, Read, Write};
 use uuid::Uuid;
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
-use rand::os::OsRng;
-use rand::Rng;
 use super::*;
 use super::crypt::DoubleHashedPw;
 use super::error::*;
