@@ -129,8 +129,8 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
         match option {
             Some(repo) => {
                 if repo.check_pw(pw) {
-//                    let repostate = create_repository_state(pw, repo, &state.scan_result);
-//                    state.repositories.insert(id.clone(), repostate);
+                    //                    let repostate = create_repository_state(pw, repo, &state.scan_result);
+                    //                    state.repositories.insert(id.clone(), repostate);
                     Ok(CryptResponse::RepositoryOpened { id: id.clone() })
                 } else {
                     Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
@@ -156,18 +156,28 @@ mod tests {
     use crypt::serialize::ByteSerialization;
     use std::io::Write;
 
-    fn create_temp_repo() -> (TempDir, Repository) {
+    fn create_temp_repo() -> (TempDir, Repository, Vec<u8>) {
         let tempdir = TempDir::new("temp_repo").unwrap();
         let header = RepoHeader::new_for_test();
-        let repo = crypt::Repository::new("Hallo Repo".into(), "password".as_bytes(), header);
+        let pw_bytes = "password".as_bytes();
+        let repo = crypt::Repository::new("Hallo Repo".into(), pw_bytes, header);
+        let pw_hash = repo.hash_pw(pw_bytes);
+        println!("{:?}", pw_hash);
+
+        let file_header = crypt::FileHeader::new(&repo.header);
+        let mut file = crypt::EncryptedFile::new(file_header, "test");
         {
             let mut dir = tempdir.path();
             let mut buff = Vec::new();
             repo.to_bytes(&mut buff);
             let mut f = File::create(dir.join("repo")).unwrap();
             f.write(buff.as_slice());
+
+            file.set_path(&dir.join("file"));
+            file.set_content("hallo content".as_bytes());
+            file.save(pw_hash.as_slice()).unwrap();
         }
-        (tempdir, repo)
+        (tempdir, repo, pw_hash)
     }
 
     use std::mem::size_of;
@@ -180,7 +190,7 @@ mod tests {
 
     #[test]
     fn open_repo() {
-        let (temp, repo) = create_temp_repo();
+        let (temp, repo, pw) = create_temp_repo();
         let dir = temp.path().into();
         let pw = "password".as_bytes();
         let pw_wrong = "hello".as_bytes();

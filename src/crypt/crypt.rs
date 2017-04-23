@@ -71,11 +71,18 @@ impl PasswordHashType {
 }
 
 impl Repository {
-    pub fn check_pw(&self, pw: &[u8]) -> bool {
-        let len = self.header.encryption_type.hash_len();
-        let ref kdf = self.header.password_hash_type;
-        let v = kdf.hash(pw, len);
-        let checksum = kdf.hash(v.as_slice(), len);
+    pub fn hash_pw(&self, pw_plain: &[u8]) -> Vec<u8> {
+        Repository::hash_pw_ext(&self.header.encryption_type, &self.header.password_hash_type, pw_plain)
+    }
+
+    pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: &[u8]) -> Vec<u8> {
+        let len = enc_type.key_len();
+        hash_type.hash(pw_plain, len)
+    }
+
+    pub fn check_pw(&self, pw_plain: &[u8]) -> bool {
+        let v = self.hash_pw(pw_plain);
+        let checksum = self.hash_pw(v.as_slice());
 
         match verify_slices_are_equal(checksum.as_slice(), self.hash.as_slice()) {
             Ok(_) => true,

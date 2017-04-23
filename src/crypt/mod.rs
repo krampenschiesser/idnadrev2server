@@ -191,15 +191,17 @@ impl EncryptedFile {
     pub fn set_path(&mut self, path: &PathBuf) {
         self.path = Some(path.clone());
     }
+
+    pub fn set_content(&mut self, content: &[u8]) {
+        self.content = Some(content.to_vec());
+    }
 }
 
 impl Repository {
     pub fn new(name: &str, pw: &[u8], header: RepoHeader) -> Self {
         let checksum = {
-            let len = header.encryption_type.hash_len();
-            let ref kdf = header.password_hash_type;
-            let v = kdf.hash(pw, len);
-            kdf.hash(v.as_slice(), len)
+            let v = Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, pw);
+            Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, v.as_slice())
         };
         Repository { header: header, hash: checksum, name: name.into(), path: None }
     }
