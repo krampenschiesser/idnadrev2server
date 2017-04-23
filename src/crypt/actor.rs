@@ -8,6 +8,7 @@ use super::crypt::{PlainPw, HashedPw};
 use super::error::*;
 use std::time::Instant;
 use chrono::Duration;
+use std::ops::Sub;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct AccessToken {
@@ -334,14 +335,14 @@ mod tests {
         let token = state.generate_token();
 
         assert_eq!(true, state.check_token(&token));
-        let long_ago = Instant::now() - Duration::minutes(21).to_std().unwrap();
+        let long_ago = Instant::now().sub(Duration::minutes(21).to_std().unwrap());
         state.set_token_time(&token, long_ago);
         assert_eq!(false, state.check_token(&token));
 
         let token = state.generate_token();
         assert_eq!(false, state.check_token(&Uuid::new_v4()));
 
-        let long_ago = Instant::now() - Duration::minutes(5).to_std().unwrap();
+        let long_ago = Instant::now().sub(Duration::minutes(5).to_std().unwrap());
         state.set_token_time(&token, long_ago);
         state.check_token(&token);
 
