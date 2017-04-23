@@ -21,6 +21,18 @@ impl PlainPw {
     }
 }
 
+impl <'a>From<&'a str> for PlainPw {
+    fn from(i: &str) -> Self {
+        PlainPw::new(i.as_bytes())
+    }
+}
+
+impl From<String> for PlainPw {
+    fn from(i: String) -> Self {
+        PlainPw::new(i.as_bytes())
+    }
+}
+
 #[derive(Clone)]
 pub struct HashedPw {
     content: Vec<u8>

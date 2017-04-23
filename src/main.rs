@@ -20,6 +20,8 @@ extern crate notify;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
+#[cfg(test)]
+extern crate spectral;
 
 
 mod crypt;

@@ -29,3 +29,4 @@ log4rs = "0.6.3"
 
 [dev-dependencies]
 rocket = { version = "0.2.6", features = ["testing"] }
+spectral = "0.6.0"
