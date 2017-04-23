@@ -132,14 +132,11 @@ impl MainHeader {
 }
 
 impl RepoHeader {
-    pub fn new_default_random() -> Self {
-        let mut rng = OsRng::new().unwrap();
-        let it = rng.gen_range(1, 5);
-        let mem = rng.gen_range(1024, 4096);
-        let cpu = 1;//rng.gen_range(1, 4);
-        //        let it=16;
-        //        let mem = 8;
-        //        let cpu=1;
+    #[cfg(test)]
+    pub fn new_for_test() -> Self {
+        let it = 1;
+        let mem = 1;
+        let cpu = 1;
         let kdf = PasswordHashType::SCrypt { iterations: it, memory_costs: mem, parallelism: cpu };
         RepoHeader::new(kdf, EncryptionType::RingChachaPoly1305)
     }

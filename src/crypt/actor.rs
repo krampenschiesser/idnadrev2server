@@ -158,7 +158,7 @@ mod tests {
 
     fn create_temp_repo() -> (TempDir, Repository) {
         let tempdir = TempDir::new("temp_repo").unwrap();
-        let header = RepoHeader::new_default_random();
+        let header = RepoHeader::new_for_test();
         let repo = crypt::Repository::new("Hallo Repo".into(), "password".as_bytes(), header);
         {
             let mut dir = tempdir.path();

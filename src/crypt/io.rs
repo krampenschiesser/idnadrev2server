@@ -471,7 +471,7 @@ mod tests {
             let mut file2 = File::create(&dir.join("file2")).unwrap();
             let mut file3 = File::create(&dir.join("errorfile")).unwrap();
 
-            let repo_header = RepoHeader::new_default_random();
+            let repo_header = RepoHeader::new_for_test();
             let mut v = Vec::new();
             repo_header.to_bytes(&mut v);
             repofile.write_all(v.as_slice());
@@ -515,7 +515,7 @@ mod tests {
         let tempdir = TempDir::new("scanfolder").unwrap();
         let dir = tempdir.path();
 
-        let repo = RepoHeader::new_default_random();
+        let repo = RepoHeader::new_for_test();
         let pw = repo.password_hash_type.hash("password".as_bytes(), repo.encryption_type.key_len());
 
         let mut encrypted_file = EncryptedFile::with_content( FileHeader::new(&repo), "header", "content".as_bytes());

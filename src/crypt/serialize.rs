@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn file_header() {
-        let rh = RepoHeader::new_default_random();
+        let rh = RepoHeader::new_for_test();
         let h = FileHeader::new(&rh);
 
         let mut result = Vec::new();
