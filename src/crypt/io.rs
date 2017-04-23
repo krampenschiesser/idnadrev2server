@@ -10,77 +10,9 @@ use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher
 use notify;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
-use std::string::FromUtf8Error;
 use super::crypt::HashedPw;
-use std::fmt::{Display,Formatter};
-use std::fmt;
+use super::error::*;
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum CryptError {
-    FileAlreadyExists(String),
-    FileDoesNotExist(String),
-    WrongPrefix,
-    IOError(String),
-    ParseError(super::ParseError),
-    WatcherCreationError,
-    RingError(super::crypt::RingError),
-    NoFilePath,
-    NoFileContent,
-}
-
-impl Display for CryptError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match *self {
-            CryptError::FileAlreadyExists(ref name) => write!(f, "File {} already exists.",name),
-            CryptError::FileDoesNotExist(ref name) => write!(f, "File {} does not exist.",name),
-            CryptError::WrongPrefix => write!(f, "Wrong binary prefix for file."),
-            CryptError::IOError(ref description) => write!(f, "IO Error happened: {}",description),
-            CryptError::ParseError(ref e) => write!(f, "Parsing error occured: {}",e),
-            CryptError::WatcherCreationError => write!(f, "Could not create file watcher!"),
-            CryptError::RingError(ref e) => write!(f, "Error happened during encryption/decryption: {}",e),
-            CryptError::NoFilePath => write!(f, "No such file path"),
-            CryptError::NoFileContent => write!(f, "No file content"),
-        }
-    }
-}
-//
-//impl std::error::Error for CryptError {
-//    fn description(&self) -> &str {
-//        ""
-//    }
-//
-//    fn cause(&self) -> Option<&std::error::Error> { None }
-//}
-
-impl From<io::Error> for CryptError {
-    fn from(a: io::Error) -> Self {
-        CryptError::IOError(format!("{:?}", a))
-    }
-}
-
-impl From<FromUtf8Error> for CryptError {
-    fn from(e: FromUtf8Error) -> Self {
-        CryptError::ParseError(ParseError::InvalidUtf8(e.description().into()))
-    }
-}
-
-impl From<ParseError> for CryptError {
-    fn from(e: ParseError) -> Self {
-        CryptError::ParseError(e)
-    }
-}
-
-impl From<notify::Error> for CryptError {
-    fn from(_: notify::Error) -> Self {
-        CryptError::WatcherCreationError
-    }
-}
-
-impl From<super::crypt::RingError> for CryptError {
-    fn from(e: super::crypt::RingError) -> Self {
-        CryptError::RingError(e)
-    }
-}
 
 pub struct TempFile {
     path: PathBuf

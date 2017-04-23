@@ -3,9 +3,9 @@ use super::{RepoHeader, Repository, EncryptedFile};
 use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use super::io::{ScanResult, scan, CryptError};
+use super::io::{ScanResult, scan};
 use super::crypt::{PlainPw, HashedPw};
-use std::error::Error;
+use super::error::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FileDescriptor {

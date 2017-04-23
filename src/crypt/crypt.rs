@@ -4,25 +4,8 @@ use ring::constant_time::verify_slices_are_equal;
 use super::{EncryptionType, PasswordHashType, Repository};
 use std::time::{Instant};
 use chrono::Duration;
-use std::fmt::{Display,Formatter};
-use std::fmt;
+use super::error::*;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum RingError {
-    KeyFailure,
-    DecryptFailue,
-    EncryptFailue,
-}
-
-impl Display for RingError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match *self {
-            RingError::KeyFailure=> write!(f, "Something is wrong with the key, maybe length?"),
-            RingError::DecryptFailue=> write!(f, "Error happened during decryption"),
-            RingError::EncryptFailue => write!(f, "Error happened during encryption"),
-        }
-    }
-}
 #[derive(Clone)]
 pub struct PlainPw {
     content: Vec<u8>

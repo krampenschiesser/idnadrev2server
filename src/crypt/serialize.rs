@@ -5,6 +5,7 @@ use rand::os::OsRng;
 use rand::Rng;
 use super::*;
 use super::crypt::DoubleHashedPw;
+use super::error::*;
 
 const UUID_LENGTH: usize = 16;
 
