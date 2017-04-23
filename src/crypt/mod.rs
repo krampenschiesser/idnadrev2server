@@ -5,7 +5,11 @@ use rand::os::OsRng;
 use rand::Rng;
 use std;
 use crypt::serialize::ByteSerialization;
-use crypt::crypt::{DoubleHashedPw,PlainPw};
+use crypt::crypt::{DoubleHashedPw, PlainPw};
+use std::str::Utf8Error;
+use std::fmt::{Display,Formatter};
+use std::fmt;
+use std::error::Error;
 
 mod io;
 mod crypt;
@@ -14,13 +18,27 @@ pub mod serialize;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 enum ParseError {
-    WrongValue(u64),
+    WrongValue(u64, u8),
     IllegalPos(u64),
-    InvalidUtf8,
-    IoError,
+    InvalidUtf8(String),
+    IoError(String),
     NoPrefix,
     NoValidUuid(u64),
     UnknownFileVersion(u8),
+}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            ParseError::WrongValue(ref pos,ref  val) => write!(f, "Wrong value '{}' at pos {}", val, pos),
+            ParseError::IllegalPos(ref pos) => write!(f, "Illegal position {}", pos),
+            ParseError::InvalidUtf8(ref e) => write!(f, "No valid utf8: {}", e),
+            ParseError::IoError(ref description) => write!(f, "IO Error happened: {}", description),
+            ParseError::NoPrefix => write!(f, "No prefix present"),
+            ParseError::NoValidUuid(ref pos) => write!(f, "No valid uuid at {}", pos),
+            ParseError::UnknownFileVersion(ref version) => write!(f, "Unknown file version {}", version),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -194,6 +212,10 @@ impl EncryptedFile {
     pub fn set_content(&mut self, content: &[u8]) {
         self.content = Some(content.to_vec());
     }
+
+    pub fn get_id(&self) -> Uuid {
+        self.encryption_header.get_id()
+    }
 }
 
 impl Repository {
@@ -224,12 +246,12 @@ fn random_vec(len: usize) -> Vec<u8> {
 
 impl From<std::string::FromUtf8Error> for ParseError {
     fn from(e: std::string::FromUtf8Error) -> Self {
-        ParseError::InvalidUtf8
+        ParseError::InvalidUtf8(e.description().into())
     }
 }
 
 impl From<std::io::Error> for ParseError {
     fn from(e: std::io::Error) -> Self {
-        ParseError::IoError
+        ParseError::IoError(e.description().into())
     }
 }

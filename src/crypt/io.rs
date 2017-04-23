@@ -12,47 +12,73 @@ use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 use std::string::FromUtf8Error;
 use super::crypt::HashedPw;
+use std::fmt::{Display,Formatter};
+use std::fmt;
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum Error {
+pub enum CryptError {
     FileAlreadyExists(String),
     FileDoesNotExist(String),
     WrongPrefix,
     IOError(String),
     ParseError(super::ParseError),
     WatcherCreationError,
-    CryptError(super::crypt::CryptError),
+    RingError(super::crypt::RingError),
     NoFilePath,
     NoFileContent,
 }
 
-impl From<io::Error> for Error {
+impl Display for CryptError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            CryptError::FileAlreadyExists(ref name) => write!(f, "File {} already exists.",name),
+            CryptError::FileDoesNotExist(ref name) => write!(f, "File {} does not exist.",name),
+            CryptError::WrongPrefix => write!(f, "Wrong binary prefix for file."),
+            CryptError::IOError(ref description) => write!(f, "IO Error happened: {}",description),
+            CryptError::ParseError(ref e) => write!(f, "Parsing error occured: {}",e),
+            CryptError::WatcherCreationError => write!(f, "Could not create file watcher!"),
+            CryptError::RingError(ref e) => write!(f, "Error happened during encryption/decryption: {}",e),
+            CryptError::NoFilePath => write!(f, "No such file path"),
+            CryptError::NoFileContent => write!(f, "No file content"),
+        }
+    }
+}
+//
+//impl std::error::Error for CryptError {
+//    fn description(&self) -> &str {
+//        ""
+//    }
+//
+//    fn cause(&self) -> Option<&std::error::Error> { None }
+//}
+
+impl From<io::Error> for CryptError {
     fn from(a: io::Error) -> Self {
-        Error::IOError(format!("{:?}", a))
+        CryptError::IOError(format!("{:?}", a))
     }
 }
 
-impl From<FromUtf8Error> for Error {
-    fn from(_: FromUtf8Error) -> Self {
-        Error::ParseError(ParseError::InvalidUtf8)
+impl From<FromUtf8Error> for CryptError {
+    fn from(e: FromUtf8Error) -> Self {
+        CryptError::ParseError(ParseError::InvalidUtf8(e.description().into()))
     }
 }
 
-impl From<ParseError> for Error {
+impl From<ParseError> for CryptError {
     fn from(e: ParseError) -> Self {
-        Error::ParseError(e)
+        CryptError::ParseError(e)
     }
 }
 
-impl From<notify::Error> for Error {
+impl From<notify::Error> for CryptError {
     fn from(_: notify::Error) -> Self {
-        Error::WatcherCreationError
+        CryptError::WatcherCreationError
     }
 }
 
-impl From<super::crypt::CryptError> for Error {
-    fn from(e: super::crypt::CryptError) -> Self {
-        Error::CryptError(e)
+impl From<super::crypt::RingError> for CryptError {
+    fn from(e: super::crypt::RingError) -> Self {
+        CryptError::RingError(e)
     }
 }
 
@@ -64,7 +90,7 @@ pub struct TempFile {
 pub struct ScanResult {
     repositories: Vec<Repository>,
     files: Vec<(FileHeader, PathBuf)>,
-    invalid: Vec<(Error, PathBuf)>,
+    invalid: Vec<(CryptError, PathBuf)>,
     watcher: RecommendedWatcher,
     file_change_receiver: Receiver<DebouncedEvent>,
 }
@@ -73,7 +99,7 @@ pub struct ScanResult {
 pub enum CheckRes {
     Repo(RepoHeader, PathBuf),
     File(FileHeader, PathBuf),
-    Error(Error, PathBuf),
+    Error(CryptError, PathBuf),
 }
 
 impl CheckRes {
@@ -126,7 +152,7 @@ impl Drop for TempFile {
 }
 
 impl Repository {
-    pub fn load(path: PathBuf) -> Result<Self, Error> {
+    pub fn load(path: PathBuf) -> Result<Self, CryptError> {
         let mut f = File::open(path.clone())?;
         let mut v = Vec::new();
         f.read_to_end(&mut v)?;
@@ -139,7 +165,7 @@ impl Repository {
 }
 
 impl EncryptedFile {
-    pub fn load_head(header: &FileHeader, key: &HashedPw, path: &PathBuf) -> Result<Self, Error> {
+    pub fn load_head(header: &FileHeader, key: &HashedPw, path: &PathBuf) -> Result<Self, CryptError> {
         let f = File::open(path.clone())?;
         let mut f = f.take(header.byte_len() as u64 + header.header_length as u64);
         let mut v = Vec::new();
@@ -160,7 +186,7 @@ impl EncryptedFile {
         Ok(result)
     }
 
-    pub fn load_content(header: &FileHeader, key: &HashedPw, path: &PathBuf) -> Result<Vec<u8>, Error> {
+    pub fn load_content(header: &FileHeader, key: &HashedPw, path: &PathBuf) -> Result<Vec<u8>, CryptError> {
         let mut f = File::open(path.clone())?;
         let mut v = Vec::new();
         f.read_to_end(&mut v)?;
@@ -176,9 +202,9 @@ impl EncryptedFile {
         Ok(plaintext)
     }
 
-    pub fn save(&mut self, key: &HashedPw) -> Result<(), Error> {
-        let path = self.path.as_ref().ok_or(Error::NoFilePath)?;
-        let content = self.content.as_ref().ok_or(Error::NoFileContent)?;
+    pub fn save(&mut self, key: &HashedPw) -> Result<(), CryptError> {
+        let path = self.path.as_ref().ok_or(CryptError::NoFilePath)?;
+        let content = self.content.as_ref().ok_or(CryptError::NoFileContent)?;
 
         let additional = self.encryption_header.get_additional_data();
 
@@ -210,7 +236,7 @@ impl EncryptedFile {
     }
 }
 
-pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, Error> {
+pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
     let (tx, rx) = channel();
     let mut watcher = watcher(tx, Duration::from_secs(10))?;
     for path in folders {
@@ -285,7 +311,7 @@ fn check_map_file(dir_entry: Result<DirEntry, io::Error>) -> Result<CheckRes, ()
     Ok(val)
 }
 
-fn read_file_header(path: &PathBuf) -> Result<FileHeader, Error> {
+fn read_file_header(path: &PathBuf) -> Result<FileHeader, CryptError> {
     let f = File::open(path)?;
     let mut v = Vec::new();
     f.take(1000).read_to_end(&mut v)?;
@@ -295,7 +321,7 @@ fn read_file_header(path: &PathBuf) -> Result<FileHeader, Error> {
 }
 
 
-fn read_repo_header(path: &PathBuf) -> Result<RepoHeader, Error> {
+fn read_repo_header(path: &PathBuf) -> Result<RepoHeader, CryptError> {
     let f = File::open(path)?;
     let mut v = Vec::new();
     f.take(1000).read_to_end(&mut v)?;
@@ -305,34 +331,34 @@ fn read_repo_header(path: &PathBuf) -> Result<RepoHeader, Error> {
 }
 
 
-fn check_plain_files_not_exist(id: &str, folder: &PathBuf) -> Result<(), Error> {
+fn check_plain_files_not_exist(id: &str, folder: &PathBuf) -> Result<(), CryptError> {
     check_file_not_exists(format!("{}.json", id).as_str(), folder)?;
     check_file_not_exists(id, folder)
 }
 
-fn check_plain_files_exist(id: &str, folder: &PathBuf) -> Result<(), Error> {
+fn check_plain_files_exist(id: &str, folder: &PathBuf) -> Result<(), CryptError> {
     check_file_exists(format!("{}.json", id).as_str(), &folder)?;
     check_file_exists(id, &folder)
 }
 
-fn check_file_not_exists(id: &str, folder: &PathBuf) -> Result<(), Error> {
+fn check_file_not_exists(id: &str, folder: &PathBuf) -> Result<(), CryptError> {
     let main_path = folder.join(id);
     let r = check_file_exists(id, folder);
     match r {
-        Ok(_) => Err(Error::FileAlreadyExists(path_to_str(&main_path))),
+        Ok(_) => Err(CryptError::FileAlreadyExists(path_to_str(&main_path))),
         Err(_) => Ok(())
     }
 }
 
-fn check_file_exists(id: &str, folder: &PathBuf) -> Result<(), Error> {
+fn check_file_exists(id: &str, folder: &PathBuf) -> Result<(), CryptError> {
     let main_path = folder.join(id);
     if !main_path.exists() {
-        return Err(Error::FileDoesNotExist(path_to_str(&main_path)));
+        return Err(CryptError::FileDoesNotExist(path_to_str(&main_path)));
     }
     Ok(())
 }
 
-fn check_file_prefix(id: &str, folder: &PathBuf, plain_files: bool) -> Result<MainHeader, Error> {
+fn check_file_prefix(id: &str, folder: &PathBuf, plain_files: bool) -> Result<MainHeader, CryptError> {
     if plain_files {
         check_json_file(&folder.join(format!("{}.json", id)))
     } else {
@@ -341,7 +367,7 @@ fn check_file_prefix(id: &str, folder: &PathBuf, plain_files: bool) -> Result<Ma
     }
 }
 
-fn check_bin_file(path: &PathBuf) -> Result<MainHeader, Error> {
+fn check_bin_file(path: &PathBuf) -> Result<MainHeader, CryptError> {
     let file = File::open(path)?;
     let header_length = 23;
     let mut file = file.take(header_length);
@@ -351,13 +377,13 @@ fn check_bin_file(path: &PathBuf) -> Result<MainHeader, Error> {
     Ok(h)
 }
 
-fn check_json_file(path: &PathBuf) -> Result<MainHeader, Error> {
+fn check_json_file(path: &PathBuf) -> Result<MainHeader, CryptError> {
     let file = File::open(path)?;
     let b64_len = 32;
     let mut file = file.take(b64_len);
     let mut content = String::new();
     file.read_to_string(&mut content)?;
-    let decode = decode(&content).map_err(|_| Error::WrongPrefix)?;
+    let decode = decode(&content).map_err(|_| CryptError::WrongPrefix)?;
     let mut cursor = Cursor::new(decode.as_slice());
     let h = MainHeader::from_bytes(&mut cursor)?;
     Ok(h)
@@ -381,35 +407,35 @@ mod tests {
     fn file_existance() {
         let dir = TempDir::new("file_existance").unwrap().into_path();
         let err = check_file_exists("4711", &dir);
-        assert_eq!(Err(Error::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
+        assert_eq!(Err(CryptError::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
 
         let err = check_plain_files_exist("4711", &dir);
-        assert_eq!(Err(Error::FileDoesNotExist(path_to_str(&dir.join("4711.json")))), err);
+        assert_eq!(Err(CryptError::FileDoesNotExist(path_to_str(&dir.join("4711.json")))), err);
         {
             File::create(&dir.join("4711.json")).unwrap();
         }
         let err = check_plain_files_exist("4711", &dir);
-        assert_eq!(Err(Error::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
+        assert_eq!(Err(CryptError::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
     }
 
     #[test]
     fn no_file_exists() {
-        let  dir = TempDir::new("file_not_existance").unwrap().into_path();
+        let dir = TempDir::new("file_not_existance").unwrap().into_path();
         {
             File::create(&dir.join("4711")).unwrap();
         }
 
         let err = check_file_not_exists("4711", &dir);
-        assert_eq!(Err(Error::FileAlreadyExists(path_to_str(&dir.join("4711")))), err);
+        assert_eq!(Err(CryptError::FileAlreadyExists(path_to_str(&dir.join("4711")))), err);
 
 
         let err = check_plain_files_not_exist("4711", &dir);
-        assert_eq!(Err(Error::FileAlreadyExists(path_to_str(&dir.join("4711")))), err);
+        assert_eq!(Err(CryptError::FileAlreadyExists(path_to_str(&dir.join("4711")))), err);
         {
             File::create(&dir.join("4711.json")).unwrap();
         }
         let err = check_plain_files_not_exist("4711", &dir);
-        assert_eq!(Err(Error::FileAlreadyExists(path_to_str(&dir.join("4711.json")))), err);
+        assert_eq!(Err(CryptError::FileAlreadyExists(path_to_str(&dir.join("4711.json")))), err);
     }
 
     #[test]
@@ -438,7 +464,7 @@ mod tests {
             f.write_all(c.as_slice()).unwrap();
         }
         let res = check_file_prefix("4711", &dir, false);
-        assert_eq!(Err(Error::ParseError(ParseError::NoPrefix)), res);
+        assert_eq!(Err(CryptError::ParseError(ParseError::NoPrefix)), res);
     }
 
     #[test]
@@ -468,7 +494,7 @@ mod tests {
             f.write_all(b64.as_bytes()).unwrap();
         }
         let res = check_file_prefix("4711", &dir, true);
-        assert_eq!(Err(Error::ParseError(ParseError::NoPrefix)), res);
+        assert_eq!(Err(CryptError::ParseError(ParseError::NoPrefix)), res);
     }
 
     #[test]

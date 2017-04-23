@@ -3,8 +3,9 @@ use super::{RepoHeader, Repository, EncryptedFile};
 use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use super::io::{ScanResult, scan, Error};
+use super::io::{ScanResult, scan, CryptError};
 use super::crypt::{PlainPw, HashedPw};
+use std::error::Error;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FileDescriptor {
@@ -64,6 +65,7 @@ pub enum CryptResponse {
 
 struct RepositoryState {
     files: HashMap<Uuid, EncryptedFile>,
+    error_files: Vec<(PathBuf, String)>,
     key: HashedPw,
     repo: Repository,
 }
@@ -77,7 +79,7 @@ struct State {
 }
 
 impl State {
-    fn new(folders: Vec<PathBuf>) -> Result<Self, Error> {
+    fn new(folders: Vec<PathBuf>) -> Result<Self, CryptError> {
         let result = scan(&folders)?;
         Ok(State { nonces: HashSet::new(), repositories: HashMap::new(), folders: Vec::new(), scan_result: result })
     }
@@ -90,7 +92,7 @@ impl State {
 
 impl RepositoryState {
     pub fn new(repo: Repository, key: HashedPw) -> Self {
-        RepositoryState { key: key, repo: repo, files: HashMap::new() }
+        RepositoryState { key: key, repo: repo, files: HashMap::new(), error_files: Vec::new() }
     }
 }
 
@@ -111,7 +113,7 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
 
         if hashed == existing.key {
             Ok(CryptResponse::RepositoryOpened { id: id.clone() })
-        }else {
+        } else {
             Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
         }
     } else {
@@ -134,10 +136,19 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
 
 fn create_repository_state(pw: HashedPw, repo: Repository, scan_result: &ScanResult) -> RepositoryState {
     let to_load = scan_result.get_files_for_repo(&repo.get_id());
-    //    for (header, path) in to_load {
-    //        EncryptedFile::load_head(header, )
-    //    }
-    RepositoryState::new(repo,pw)
+    let mut repo_state = RepositoryState::new(repo, pw);
+
+    for (header, path) in to_load {
+        match EncryptedFile::load_head(&header, &repo_state.key, &path) {
+            Ok(f) => {
+                repo_state.files.insert(f.get_id(), f);
+            }
+            Err(e) => {
+                repo_state.error_files.push((path, format!("{}",e)));
+            }
+        }
+    }
+    repo_state
 }
 
 #[cfg(test)]
@@ -149,7 +160,7 @@ mod tests {
     use std::fs::File;
     use crypt::serialize::ByteSerialization;
     use std::io::Write;
-    use super::super::crypt::{PlainPw,HashedPw};
+    use super::super::crypt::{PlainPw, HashedPw};
 
     fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
         let tempdir = TempDir::new("temp_repo").unwrap();

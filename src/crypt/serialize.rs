@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read,Write};
+use std::io::{Cursor, Read, Write};
 use uuid::Uuid;
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
@@ -54,7 +54,7 @@ impl ByteSerialization for EncryptionType {
             0 => Ok(EncryptionType::None),
             1 => Ok(EncryptionType::RingChachaPoly1305),
             2 => Ok(EncryptionType::RingAESGCM),
-            _ => Err(ParseError::WrongValue(pos))
+            _ => Err(ParseError::WrongValue(pos, x))
         }
     }
     fn byte_len(&self) -> usize {
@@ -101,7 +101,7 @@ impl ByteSerialization for PasswordHashType {
                 let cpu = read_u32(input)?;
                 Ok(PasswordHashType::SCrypt { iterations: iterations, memory_costs: mem, parallelism: cpu })
             }
-            _ => Err(ParseError::WrongValue(pos))
+            _ => Err(ParseError::WrongValue(pos, x))
         }
     }
     fn byte_len(&self) -> usize {
@@ -242,7 +242,7 @@ mod tests {
         assert_eq!(EncryptionType::RingChachaPoly1305, EncryptionType::from_bytes(&mut Cursor::new(&[1])).unwrap());
         assert_eq! (EncryptionType::RingAESGCM, EncryptionType::from_bytes(&mut Cursor::new(&[2])).unwrap());
 
-        assert_eq! (Some(ParseError::WrongValue(0)), EncryptionType::from_bytes(&mut Cursor::new(&[42])).err());
+        assert_eq! (Some(ParseError::WrongValue(0, 42)), EncryptionType::from_bytes(&mut Cursor::new(&[42])).err());
     }
 
     #[test]

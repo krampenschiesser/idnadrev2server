@@ -4,14 +4,25 @@ use ring::constant_time::verify_slices_are_equal;
 use super::{EncryptionType, PasswordHashType, Repository};
 use std::time::{Instant};
 use chrono::Duration;
+use std::fmt::{Display,Formatter};
+use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum CryptError {
+pub enum RingError {
     KeyFailure,
     DecryptFailue,
     EncryptFailue,
 }
 
+impl Display for RingError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            RingError::KeyFailure=> write!(f, "Something is wrong with the key, maybe length?"),
+            RingError::DecryptFailue=> write!(f, "Error happened during decryption"),
+            RingError::EncryptFailue => write!(f, "Error happened during encryption"),
+        }
+    }
+}
 #[derive(Clone)]
 pub struct PlainPw {
     content: Vec<u8>
@@ -87,28 +98,28 @@ impl PartialEq for DoubleHashedPw {
     }
 }
 
-pub fn encrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
+pub fn encrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u8], additional: &[u8]) -> Result<Vec<u8>, RingError> {
     let alg = enctype.algorithm();
     match alg {
         None => Ok(data.to_vec()),
         Some(a) => {
-            let key = SealingKey::new(a, key.as_slice()).map_err(|_| CryptError::KeyFailure)?;
+            let key = SealingKey::new(a, key.as_slice()).map_err(|_| RingError::KeyFailure)?;
             let mut ciphertext = data.to_vec();
             ciphertext.resize(data.len() + enctype.hash_len(), 0);
-            seal_in_place(&key, nonce, additional, ciphertext.as_mut_slice(), enctype.hash_len()).map_err(|_| CryptError::EncryptFailue)?;
+            seal_in_place(&key, nonce, additional, ciphertext.as_mut_slice(), enctype.hash_len()).map_err(|_| RingError::EncryptFailue)?;
             Ok(ciphertext)
         }
     }
 }
 
-pub fn decrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
+pub fn decrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u8], additional: &[u8]) -> Result<Vec<u8>, RingError> {
     let alg = enctype.algorithm();
     match alg {
         None => Ok(data.to_vec()),
         Some(a) => {
-            let key = OpeningKey::new(a, key.as_slice()).map_err(|_| CryptError::KeyFailure)?;
+            let key = OpeningKey::new(a, key.as_slice()).map_err(|_| RingError::KeyFailure)?;
             let mut ciphertext = data.to_vec();
-            open_in_place(&key, nonce, additional, 0, ciphertext.as_mut_slice()).map_err(|_| CryptError::DecryptFailue)?;
+            open_in_place(&key, nonce, additional, 0, ciphertext.as_mut_slice()).map_err(|_| RingError::DecryptFailue)?;
             let content_length = ciphertext.len() - enctype.hash_len();
             ciphertext.resize(content_length, 0);
             Ok(ciphertext)
@@ -209,7 +220,7 @@ mod tests {
         let decrypt_result = decrypt(&enctype, nonce.as_slice(), &hashed_key(), ciphertext.as_slice(), additional_mod(additional).as_bytes());
         if expect_error {
             match decrypt_result {
-                Err(CryptError::DecryptFailue) => return,
+                Err(RingError::DecryptFailue) => return,
                 Err(_) => panic!("Should not happen at all. Decryption should have failed"),
                 Ok(_) => panic!("Decryption should have failed but was OK"),
             }
