@@ -1,7 +1,9 @@
 use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey, Algorithm, AES_256_GCM, CHACHA20_POLY1305};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
-
-use super::{EncryptionType, PasswordHashType};
+use ring::constant_time::verify_slices_are_equal;
+use super::{EncryptionType, PasswordHashType, Repository};
+use std::time::{Instant};
+use chrono::Duration;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 enum CryptError {
@@ -56,13 +58,31 @@ impl PasswordHashType {
             PasswordHashType::SCrypt { iterations, memory_costs, parallelism } => {
                 let mut buff = vec![0u8; len];
                 let param = ScryptParams::new(iterations, memory_costs, parallelism);
+                let now = Instant::now();
                 scrypt(input, input, &param, buff.as_mut_slice());
+
+                println!("Scrypt took {}s", Duration::from_std(now.elapsed()).unwrap().num_milliseconds());
                 buff
             }
             _ => unimplemented!()
         }
     }
 }
+
+impl Repository {
+    pub fn check_pw(&self, pw: &[u8]) -> bool {
+        let len = self.header.encryption_type.hash_len();
+        let ref kdf = self.header.password_hash_type;
+        let v = kdf.hash(pw, len);
+        let checksum = kdf.hash(v.as_slice(), len);
+
+        match verify_slices_are_equal(checksum.as_slice(), self.hash.as_slice()) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -80,7 +100,7 @@ mod tests {
         super::super::random_vec(12)
     }
 
-    fn encrypt_decrypt<F,A>(enctype: EncryptionType, mut ciphertext_mod: F, expect_error: bool, additional_mod: A)
+    fn encrypt_decrypt<F, A>(enctype: EncryptionType, mut ciphertext_mod: F, expect_error: bool, additional_mod: A)
         where F: FnMut(Vec<u8>) -> Vec<u8>, A: Fn(&str) -> &str {
         println!("Using: {:?}", enctype);
         let plaintext = "Hello Sauerland!";

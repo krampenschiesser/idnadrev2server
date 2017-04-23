@@ -4,6 +4,8 @@ use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use ring::constant_time::verify_slices_are_equal;
+use super::io::{ScanResult, scan, Error};
+use std::cell::RefCell;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FileDescriptor {
@@ -79,6 +81,7 @@ struct State {
     repositories: HashMap<Uuid, RepositoryState>,
 
     folders: Vec<PathBuf>,
+    scan_result: ScanResult,
 }
 
 impl FileState {
@@ -92,8 +95,9 @@ impl FileState {
 }
 
 impl State {
-    fn new() -> Self {
-        State { nonces: HashSet::new(), repositories: HashMap::new(), folders: Vec::new() }
+    fn new(folders: Vec<PathBuf>) -> Result<Self, Error> {
+        let result = scan(&folders)?;
+        Ok(State { nonces: HashSet::new(), repositories: HashMap::new(), folders: Vec::new(), scan_result: result })
     }
 }
 
@@ -103,8 +107,8 @@ impl RepositoryState {
 }
 
 fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
-    match cmd {
-        //        CryptCmd::OpenRepository { id, pw } => { open_repository(&id, pw.as_slice(), &mut state) }
+    match &cmd {
+        &CryptCmd::OpenRepository { ref id, ref pw } => open_repository(id, pw.as_slice(), state),
         _ => Err("dooo".to_string())
     }
 }
@@ -122,24 +126,61 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
             Err(_) => Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() }),
         }
     } else {
-        //        let repo_files = super::io::get_repo_files(&state.folders);
-        Err("bla".to_string())
+        let option = state.scan_result.get_repository(id);
+        match option {
+            Some(repo) => {
+                if repo.check_pw(pw) {
+                    Ok(CryptResponse::RepositoryOpened { id: id.clone() })
+                } else {
+                    Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
+                }
+            }
+            None => Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() }),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypt::{Repository, RepoHeader};
+    use crypt;
+    use tempdir::TempDir;
+    use std::fs::File;
+    use crypt::serialize::ByteSerialization;
+    use std::io::Write;
 
+    fn create_temp_repo() -> (TempDir, Repository) {
+        let tempdir = TempDir::new("temp_repo").unwrap();
+        let header = RepoHeader::new_default_random();
+        let repo = crypt::Repository::new("Hallo Repo".into(), "password".as_bytes(), header);
+        {
+            let mut dir = tempdir.path();
+            let mut buff = Vec::new();
+            repo.to_bytes(&mut buff);
+            let mut f = File::create(dir.join("repo")).unwrap();
+            f.write(buff.as_slice());
+        }
+        (tempdir, repo)
+    }
+
+    use std::mem::size_of;
 
     #[test]
-    #[ignore]
-    fn open_repo() {
-        let pw = "hello".as_bytes();
-        let pw_wrong = "hello123".as_bytes();
+    fn bla() {
+        let v = size_of::<usize>() * 8;
+        println!("{}", v);
+    }
 
-        let id = Uuid::new_v4();
-        let mut state = self::State::new();
+    #[test]
+    fn open_repo() {
+        let (temp, repo) = create_temp_repo();
+        let dir = temp.path().into();
+        let pw = "password".as_bytes();
+        let pw_wrong = "hello".as_bytes();
+
+        let id = repo.get_id();
+        let mut state = self::State::new(vec![dir]).unwrap();
         let response = open_repository(&id, pw, &mut state).unwrap();
         assert_eq!(CryptResponse::RepositoryOpened { id: id }, response);
 

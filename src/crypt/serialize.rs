@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read,Write};
 use uuid::Uuid;
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
@@ -198,6 +198,31 @@ impl ByteSerialization for FileHeader {
     }
     fn byte_len(&self) -> usize {
         self.main_header.byte_len() + UUID_LENGTH + self.encryption_type.byte_len() + 2 + 4 + self.nonce_header.len() + self.nonce_content.len()
+    }
+}
+
+impl ByteSerialization for Repository {
+    fn to_bytes(&self, vec: &mut Vec<u8>) {
+        self.header.to_bytes(vec);
+        let hash_len = self.hash.len() as u8;
+        vec.write_u8(hash_len);
+        vec.write(self.hash.as_slice());
+        vec.write(self.name.as_bytes());
+    }
+
+    fn from_bytes(input: &mut Cursor<&[u8]>) -> Result<Self, ParseError> {
+        let h = RepoHeader::from_bytes(input)?;
+        let hash_len = read_u8(input)?;
+        let mut buff = vec![0u8; hash_len as usize];
+        read_buff(input, &mut buff)?;
+        let mut namebuff = Vec::new();
+        input.read_to_end(&mut namebuff)?;
+        let name = String::from_utf8(namebuff)?;
+        Ok(Repository { header: h, hash: buff, name: name, path: None })
+    }
+
+    fn byte_len(&self) -> usize {
+        unimplemented!()
     }
 }
 

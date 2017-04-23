@@ -7,17 +7,20 @@ use base64::{encode, decode};
 use std::io::{Read, Write};
 use std::io;
 use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher};
+use notify;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
 #[derive(Debug, Eq, PartialEq)]
-enum Error {
+pub enum Error {
     FileAlreadyExists(String),
     FileDoesNotExist(String),
     WrongPrefix,
     IOError,
     ParseError(super::ParseError),
+    WatcherCreationError,
 }
+
 impl From<io::Error> for Error {
     fn from(a: io::Error) -> Self {
         Error::IOError
@@ -30,9 +33,15 @@ impl From<ParseError> for Error {
     }
 }
 
+impl From<notify::Error> for Error {
+    fn from(e: notify::Error) -> Self {
+        Error::WatcherCreationError
+    }
+}
+
 //#[derive(Debug)] not possible due to file watcher
 pub struct ScanResult {
-    repositories: Vec<(RepoHeader, PathBuf)>,
+    repositories: Vec<Repository>,
     files: Vec<(FileHeader, PathBuf)>,
     invalid: Vec<(Error, PathBuf)>,
     watcher: RecommendedWatcher,
@@ -46,24 +55,60 @@ pub enum CheckRes {
     Error(Error, PathBuf),
 }
 
+impl CheckRes {
+    fn get_path(&self) -> PathBuf {
+        match *self {
+            CheckRes::Repo(_, ref p) | CheckRes::File(_, ref p) | CheckRes::Error(_, ref p) => p.clone()
+        }
+    }
+}
+
 impl ScanResult {
     fn new(watcher: RecommendedWatcher, file_change_receiver: Receiver<DebouncedEvent>) -> Self {
         ScanResult { repositories: Vec::new(), files: Vec::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver }
     }
+
+    pub fn get_repository(&self, id: &Uuid) -> Option<Repository> {
+        let result = self.repositories.iter().find(|repo| {
+            repo.get_id() == *id
+        });
+        match result {
+            Some(repo) => Some(repo.clone()),
+            None => None,
+        }
+    }
 }
 
-pub fn scan(folders: Vec<PathBuf>) -> Result<ScanResult, ()> {
-    let (tx, rx) = channel();
-    let mut watcher = watcher(tx, Duration::from_secs(10)).map_err(|e| ())?;
-    for path in &folders {
-        watcher.watch(path, RecursiveMode::Recursive).map_err(|e| ())?;
-    }
+impl Repository {
+    pub fn load(header: RepoHeader, path: PathBuf) -> Result<Self, Error> {
+        let mut f = File::open(path.clone())?;
+        let mut v = Vec::new();
+        f.read_to_end(&mut v)?;
 
-    let check_results: Vec<CheckRes> = folders.into_iter().flat_map(|p| scan_folder(p)).collect();
+        let mut c = Cursor::new(v.as_slice());
+        let mut repo = Repository::from_bytes(&mut c)?;
+        repo.path = Some(path);
+        Ok(repo)
+    }
+}
+
+pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, Error> {
+    let (tx, rx) = channel();
+    let mut watcher = watcher(tx, Duration::from_secs(10))?;
+    for path in folders {
+        watcher.watch(path, RecursiveMode::Recursive)?;
+    }
+    let check_results: Vec<CheckRes> = folders.into_iter().flat_map(|p| scan_folder(&p)).collect();
+
     let mut s = ScanResult::new(watcher, rx);
     for i in check_results {
         match i {
-            CheckRes::Repo(h, p) => s.repositories.push((h, p)),
+            CheckRes::Repo(h, p) => {
+                let load = Repository::load(h, p);
+                if load.is_ok() {
+                    s.repositories.push(load.unwrap());
+                }
+            }
             CheckRes::File(h, p) => s.files.push((h, p)),
             CheckRes::Error(e, p) => s.invalid.push((e, p)),
         };
@@ -71,7 +116,7 @@ pub fn scan(folders: Vec<PathBuf>) -> Result<ScanResult, ()> {
     Ok(s)
 }
 
-pub fn scan_folder(folder: PathBuf) -> Vec<CheckRes> {
+pub fn scan_folder(folder: &PathBuf) -> Vec<CheckRes> {
     match folder.read_dir() {
         Err(_) => Vec::new(),
         Ok(file_iter) => {
@@ -137,7 +182,7 @@ fn read_repo_header(path: &PathBuf) -> Result<RepoHeader, Error> {
     let mut v = Vec::new();
     f.take(1000).read_to_end(&mut v)?;
     let mut cursor = Cursor::new(v.as_slice());
-    let header= RepoHeader::from_bytes(&mut cursor)?;
+    let header = RepoHeader::from_bytes(&mut cursor)?;
     Ok(header)
 }
 
@@ -210,6 +255,7 @@ fn path_to_str(path: &PathBuf) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::*;
     use tempdir::TempDir;
 
     #[test]
@@ -304,5 +350,53 @@ mod tests {
         }
         let res = check_file_prefix("4711", &dir, true);
         assert_eq!(Err(Error::ParseError(ParseError::NoPrefix)), res);
+    }
+
+    #[test]
+    fn scan_folder() {
+        let mut dir = TempDir::new("scanfolder").unwrap().into_path();
+        {
+            let mut repofile = File::create(&dir.join("repository")).unwrap();
+            let mut file1 = File::create(&dir.join("file1")).unwrap();
+            let mut file2 = File::create(&dir.join("file2")).unwrap();
+            let mut file3 = File::create(&dir.join("errorfile")).unwrap();
+
+            let repo_header = RepoHeader::new_default_random();
+            let mut v = Vec::new();
+            repo_header.to_bytes(&mut v);
+            repofile.write_all(v.as_slice());
+
+            let mut v = Vec::new();
+            FileHeader::new(&repo_header).to_bytes(&mut v);
+            file1.write_all(v.as_slice());
+
+            let mut v = Vec::new();
+            FileHeader::new(&repo_header).to_bytes(&mut v);
+            file2.write_all(v.as_slice());
+
+            file3.write_all("hello world".as_bytes());
+        }
+        let result: Vec<CheckRes> = super::scan_folder(&dir);
+        assert_eq!(4, result.len());
+
+        let repo = result.iter().find(|r| match **r {
+            CheckRes::Repo(_, _) => true,
+            _ => false
+        }).unwrap();
+        assert_eq!(dir.join("repository"), repo.get_path());
+
+
+        let files: Vec<_> = result.iter().filter(|r| match **r {
+            CheckRes::File(_, _) => true,
+            _ => false
+        }).collect();
+        assert_eq!(2, files.len());
+
+
+        let error = result.iter().find(|r| match **r {
+            CheckRes::Error(_, _) => true,
+            _ => false
+        }).unwrap();
+        assert_eq!(dir.join("errorfile"), error.get_path());
     }
 }

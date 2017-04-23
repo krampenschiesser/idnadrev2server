@@ -5,6 +5,7 @@ use uuid::Uuid;
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
 use rand::Rng;
+use std;
 
 mod io;
 mod crypt;
@@ -15,6 +16,8 @@ pub mod serialize;
 enum ParseError {
     WrongValue(u64),
     IllegalPos(u64),
+    InvalidUtf8,
+    IoError,
     NoPrefix,
     NoValidUuid(u64),
     UnknownFileVersion(u8),
@@ -56,10 +59,12 @@ pub struct RepoHeader {
     pub salt: Vec<u8>,
 }
 
+#[derive(Debug, Clone)]
 pub struct Repository {
     header: RepoHeader,
+    hash: Vec<u8>,
     name: String,
-    path: PathBuf,
+    path: Option<PathBuf>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -127,9 +132,12 @@ impl MainHeader {
 impl RepoHeader {
     pub fn new_default_random() -> Self {
         let mut rng = OsRng::new().unwrap();
-        let it = rng.gen_range(100, 255);
-        let mem = rng.gen_range(1024, 8192);
-        let cpu = rng.gen_range(4, 64);
+        let it = rng.gen_range(1, 5);
+        let mem = rng.gen_range(1024, 4096);
+        let cpu = 1;//rng.gen_range(1, 4);
+//        let it=16;
+//        let mem = 8;
+//        let cpu=1;
         let kdf = PasswordHashType::SCrypt { iterations: it, memory_costs: mem, parallelism: cpu };
         RepoHeader::new(kdf, EncryptionType::RingChachaPoly1305)
     }
@@ -137,6 +145,10 @@ impl RepoHeader {
         let salt = random_vec(kdf.salt_len());
         let mh = MainHeader::new(FileVersion::RepositoryV1);
         RepoHeader { main_header: mh, encryption_type: enc_type, password_hash_type: kdf, salt: salt }
+    }
+
+    pub fn get_id(&self) -> Uuid {
+        self.main_header.id.clone()
     }
 }
 
@@ -150,10 +162,42 @@ impl FileHeader {
     }
 }
 
+impl Repository {
+    pub fn new(name: &str, pw: &[u8], header: RepoHeader) -> Self {
+        let checksum = {
+            let len = header.encryption_type.hash_len();
+            let ref kdf = header.password_hash_type;
+            let v = kdf.hash(pw, len);
+            kdf.hash(v.as_slice(), len)
+        };
+        Repository { header: header, hash: checksum, name: name.into(), path: None }
+    }
+
+    pub fn get_id(&self) -> Uuid {
+        self.header.get_id()
+    }
+
+    pub fn get_name(&self) -> String {
+        self.name.clone()
+    }
+}
+
 fn random_vec(len: usize) -> Vec<u8> {
     let mut rng = OsRng::new().unwrap();
     let mut salt = vec![0u8; len];
 
     rng.fill_bytes(salt.as_mut_slice());
     salt
+}
+
+impl From<std::string::FromUtf8Error> for ParseError {
+    fn from(e: std::string::FromUtf8Error) -> Self {
+        ParseError::InvalidUtf8
+    }
+}
+
+impl From<std::io::Error> for ParseError {
+    fn from(e: std::io::Error) -> Self {
+        ParseError::IoError
+    }
 }
