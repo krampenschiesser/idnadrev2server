@@ -87,6 +87,13 @@ impl State {
     fn get_repository(&self, id: &Uuid) -> Option<&RepositoryState> {
         self.repositories.get(id)
     }
+    fn has_repository(&self, id: &Uuid) -> bool {
+        self.repositories.contains_key(id)
+    }
+
+    fn add_repository(&mut self, id: &Uuid, repostate: RepositoryState) {
+        self.repositories.insert(id.clone(), repostate);
+    }
 }
 
 
@@ -105,9 +112,9 @@ fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
 
 fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {
     let pw = PlainPw::new(pw);
-    let existing = state.repositories.get(&id);
 
-    if existing.is_some() {
+    if state.has_repository(id) {
+    let existing = state.get_repository(id);
         let existing = existing.unwrap();
         let hashed = existing.repo.hash_key(pw);
 
@@ -123,7 +130,8 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
                 let hashed_key = repo.hash_key(pw);
                 if repo.check_hashed_key(&hashed_key) {
                     let repostate = create_repository_state(hashed_key, repo, &state.scan_result);
-                    //                    state.repositories.insert(id.clone(), repostate);
+                    state.add_repository(&id, repostate);
+
                     Ok(CryptResponse::RepositoryOpened { id: id.clone() })
                 } else {
                     Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
@@ -144,7 +152,7 @@ fn create_repository_state(pw: HashedPw, repo: Repository, scan_result: &ScanRes
                 repo_state.files.insert(f.get_id(), f);
             }
             Err(e) => {
-                repo_state.error_files.push((path, format!("{}",e)));
+                repo_state.error_files.push((path, format!("{}", e)));
             }
         }
     }
