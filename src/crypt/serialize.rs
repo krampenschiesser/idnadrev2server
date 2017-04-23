@@ -4,6 +4,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
 use rand::Rng;
 use super::*;
+use super::crypt::DoubleHashedPw;
 
 const UUID_LENGTH: usize = 16;
 
@@ -218,7 +219,7 @@ impl ByteSerialization for Repository {
         let mut namebuff = Vec::new();
         input.read_to_end(&mut namebuff)?;
         let name = String::from_utf8(namebuff)?;
-        Ok(Repository { header: h, hash: buff, name: name, path: None })
+        Ok(Repository { header: h, hash: DoubleHashedPw::from_bytes(buff), name: name, path: None })
     }
 
     fn byte_len(&self) -> usize {

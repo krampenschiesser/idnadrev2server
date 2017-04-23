@@ -7,6 +7,7 @@ use rand::os::OsRng;
 use rand::Rng;
 use std;
 use crypt::serialize::ByteSerialization;
+use crypt::crypt::{DoubleHashedPw,PlainPw};
 
 mod io;
 mod crypt;
@@ -63,7 +64,7 @@ pub struct RepoHeader {
 #[derive(Debug, Clone)]
 pub struct Repository {
     header: RepoHeader,
-    hash: Vec<u8>,
+    hash: DoubleHashedPw,
     name: String,
     path: Option<PathBuf>,
 }
@@ -198,10 +199,10 @@ impl EncryptedFile {
 }
 
 impl Repository {
-    pub fn new(name: &str, pw: &[u8], header: RepoHeader) -> Self {
+    pub fn new(name: &str, pw: PlainPw, header: RepoHeader) -> Self {
         let checksum = {
-            let v = Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, pw);
-            Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, v.as_slice())
+            let v = Repository::hash_key_ext(&header.encryption_type, &header.password_hash_type, pw);
+            Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, &v)
         };
         Repository { header: header, hash: checksum, name: name.into(), path: None }
     }

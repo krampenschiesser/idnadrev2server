@@ -1,7 +1,7 @@
 use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey, Algorithm, AES_256_GCM, CHACHA20_POLY1305};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
 use ring::constant_time::verify_slices_are_equal;
-use super::{EncryptionType, PasswordHashType, Repository};
+use super::{EncryptionType, PasswordHashType, Repository, RepoHeader};
 use std::time::{Instant};
 use chrono::Duration;
 
@@ -12,12 +12,87 @@ pub enum CryptError {
     EncryptFailue,
 }
 
-pub fn encrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
+#[derive(Clone)]
+pub struct PlainPw {
+    content: Vec<u8>
+}
+
+impl PlainPw {
+    pub fn new(pw_plain: &[u8]) -> Self {
+        PlainPw { content: pw_plain.to_vec() }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.content.as_slice()
+    }
+}
+
+#[derive(Clone)]
+pub struct HashedPw {
+    content: Vec<u8>
+}
+
+impl HashedPw {
+    pub fn new(plain: PlainPw, enc_type: &EncryptionType, hash_type: &PasswordHashType) -> Self {
+        let len = enc_type.key_len();
+        let v = hash_type.hash(plain.as_slice(), len);
+        HashedPw { content: v }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.content.as_slice()
+    }
+}
+
+impl PartialEq for HashedPw {
+    fn eq(&self, other: &HashedPw) -> bool {
+        match verify_slices_are_equal(self.as_slice(), other.as_slice()) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DoubleHashedPw {
+    content: Vec<u8>
+}
+
+impl DoubleHashedPw {
+    pub fn new(hashed: &HashedPw, enc_type: &EncryptionType, hash_type: &PasswordHashType) -> Self {
+        let len = enc_type.key_len();
+        let v = hash_type.hash(hashed.as_slice(), len);
+        DoubleHashedPw { content: v }
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        DoubleHashedPw { content: bytes }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        self.content.as_slice()
+    }
+
+    pub fn len(&self) -> usize {
+        self.content.len()
+    }
+}
+
+impl PartialEq for DoubleHashedPw {
+    fn eq(&self, other: &DoubleHashedPw) -> bool {
+        match verify_slices_are_equal(self.as_slice(), other.as_slice()) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+}
+
+pub fn encrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
     let alg = enctype.algorithm();
     match alg {
         None => Ok(data.to_vec()),
         Some(a) => {
-            let key = SealingKey::new(a, key_data).map_err(|e| CryptError::KeyFailure)?;
+            let key = SealingKey::new(a, key.as_slice()).map_err(|e| CryptError::KeyFailure)?;
             let mut ciphertext = data.to_vec();
             ciphertext.resize(data.len() + enctype.hash_len(), 0);
             seal_in_place(&key, nonce, additional, ciphertext.as_mut_slice(), enctype.hash_len()).map_err(|e| CryptError::EncryptFailue)?;
@@ -26,12 +101,12 @@ pub fn encrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[
     }
 }
 
-pub fn decrypt(enctype: &EncryptionType, nonce: &[u8], key_data: &[u8], data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
+pub fn decrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u8], additional: &[u8]) -> Result<Vec<u8>, CryptError> {
     let alg = enctype.algorithm();
     match alg {
         None => Ok(data.to_vec()),
         Some(a) => {
-            let key = OpeningKey::new(a, key_data).map_err(|e| CryptError::KeyFailure)?;
+            let key = OpeningKey::new(a, key.as_slice()).map_err(|e| CryptError::KeyFailure)?;
             let mut ciphertext = data.to_vec();
             open_in_place(&key, nonce, additional, 0, ciphertext.as_mut_slice()).map_err(|e| CryptError::DecryptFailue)?;
             let content_length = ciphertext.len() - enctype.hash_len();
@@ -71,23 +146,34 @@ impl PasswordHashType {
 }
 
 impl Repository {
-    pub fn hash_pw(&self, pw_plain: &[u8]) -> Vec<u8> {
-        Repository::hash_pw_ext(&self.header.encryption_type, &self.header.password_hash_type, pw_plain)
+    pub fn hash_key(&self, pw_plain: PlainPw) -> HashedPw {
+        Repository::hash_key_ext(&self.header.encryption_type, &self.header.password_hash_type, pw_plain)
     }
 
-    pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: &[u8]) -> Vec<u8> {
+    pub fn hash_pw(&self, pw: &HashedPw) -> DoubleHashedPw {
+        Repository::hash_pw_ext(&self.header.encryption_type, &self.header.password_hash_type, pw)
+    }
+
+    pub fn hash_key_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: PlainPw) -> HashedPw {
         let len = enc_type.key_len();
-        hash_type.hash(pw_plain, len)
+        HashedPw::new(pw_plain, enc_type, hash_type)
     }
 
-    pub fn check_pw(&self, pw_plain: &[u8]) -> bool {
-        let v = self.hash_pw(pw_plain);
-        let checksum = self.hash_pw(v.as_slice());
+    pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw: &HashedPw) -> DoubleHashedPw {
+        let len = enc_type.key_len();
+        DoubleHashedPw::new(pw, enc_type, hash_type)
+    }
 
-        match verify_slices_are_equal(checksum.as_slice(), self.hash.as_slice()) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+    pub fn check_plain_pw(&self, pw_plain: PlainPw) -> bool {
+        let single = self.hash_key(pw_plain);
+        let double = self.hash_pw(&single);
+
+        double == self.hash
+    }
+
+    pub fn check_hashed_key(&self, pw: &HashedPw) -> bool {
+        let double = self.hash_pw(&pw);
+        double == self.hash
     }
 }
 
@@ -98,10 +184,12 @@ mod tests {
     use ring_pwhash::scrypt::{scrypt, ScryptParams};
     use rand::os::OsRng;
     use rand::Rng;
+    use super::{HashedPw, PlainPw};
+    use super::super::{EncryptionType, PasswordHashType};
 
-    fn key_data() -> Vec<u8> {
-        let pwh = super::super::PasswordHashType::SCrypt { iterations: 3, memory_costs: 2, parallelism: 1 };
-        pwh.hash("hello".as_bytes(), 32)
+    fn hashed_key() -> HashedPw {
+        let plainpw = PlainPw::new("hello".as_bytes());
+        HashedPw::new(plainpw, &EncryptionType::RingChachaPoly1305, &PasswordHashType::SCrypt { iterations: 1, memory_costs: 1, parallelism: 1 })
     }
 
     fn nonce() -> Vec<u8> {
@@ -119,11 +207,11 @@ mod tests {
 
         println!("Input: {:?}", plaintext);
         println!("Data: {:?}", data);
-        let mut ciphertext = encrypt(&enctype, nonce.as_slice(), key_data().as_slice(), data, additional_data).unwrap();
+        let mut ciphertext = encrypt(&enctype, nonce.as_slice(), &hashed_key(), data, additional_data).unwrap();
         println!("Ciphertext: {:?}", ciphertext);
         let mut ciphertext = ciphertext_mod(ciphertext);
         println!("Ciphertext modified: {:?}", ciphertext);
-        let decrypt_result = decrypt(&enctype, nonce.as_slice(), key_data().as_slice(), ciphertext.as_slice(), additional_mod(additional).as_bytes());
+        let decrypt_result = decrypt(&enctype, nonce.as_slice(), &hashed_key(), ciphertext.as_slice(), additional_mod(additional).as_bytes());
         if expect_error {
             match decrypt_result {
                 Err(CryptError::DecryptFailue) => return,

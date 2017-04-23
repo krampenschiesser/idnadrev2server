@@ -21,7 +21,6 @@ pub struct LockingError;
 
 #[get("/repository")]
 pub fn list_repositories(state: State<Arc<RwLock<RepositoryState>>>) -> Result<JSON<Vec<RepoNamesDTO>>, LockingError> {
-    println!("THread: {:?}",thread::current());
     let s = state.read().map_err(|p| LockingError {})?;
     Ok(JSON(s.get_repo_names()))
 }

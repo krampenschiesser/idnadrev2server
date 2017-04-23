@@ -11,6 +11,7 @@ use notify;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 use std::string::FromUtf8Error;
+use super::crypt::HashedPw;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
@@ -135,7 +136,7 @@ impl Repository {
 }
 
 impl EncryptedFile {
-    pub fn load_head(header: &FileHeader, key: &[u8], path: &PathBuf) -> Result<Self, Error> {
+    pub fn load_head(header: &FileHeader, key: &HashedPw, path: &PathBuf) -> Result<Self, Error> {
         let mut f = File::open(path.clone())?;
         let mut f = f.take(header.byte_len() as u64 + header.header_length as u64);
         let mut v = Vec::new();
@@ -156,7 +157,7 @@ impl EncryptedFile {
         Ok(result)
     }
 
-    pub fn load_content(header: &FileHeader, key: &[u8], path: &PathBuf) -> Result<Vec<u8>, Error> {
+    pub fn load_content(header: &FileHeader, key: &HashedPw, path: &PathBuf) -> Result<Vec<u8>, Error> {
         let mut f = File::open(path.clone())?;
         let mut v = Vec::new();
         f.read_to_end(&mut v)?;
@@ -172,7 +173,7 @@ impl EncryptedFile {
         Ok(plaintext)
     }
 
-    pub fn save(&mut self, key: &[u8]) -> Result<(), Error> {
+    pub fn save(&mut self, key: &HashedPw) -> Result<(), Error> {
         let path = self.path.as_ref().ok_or(Error::NoFilePath)?;
         let content = self.content.as_ref().ok_or(Error::NoFileContent)?;
 
@@ -199,6 +200,10 @@ impl EncryptedFile {
         rename(temp.path.clone(), path)?;
 
         Ok(())
+    }
+
+    pub fn get_header(&self) -> &String {
+        &self.header
     }
 }
 
@@ -367,6 +372,8 @@ mod tests {
     use super::*;
     use super::super::*;
     use tempdir::TempDir;
+    use super::super::crypt::PlainPw;
+
 
     #[test]
     fn file_existance() {
@@ -515,18 +522,19 @@ mod tests {
         let tempdir = TempDir::new("scanfolder").unwrap();
         let dir = tempdir.path();
 
-        let repo = RepoHeader::new_for_test();
-        let pw = repo.password_hash_type.hash("password".as_bytes(), repo.encryption_type.key_len());
+        let repo_header = RepoHeader::new_for_test();
+        let repo = Repository::new("test", PlainPw::new("password".as_bytes()), repo_header);
+        let key = repo.hash_key(PlainPw::new("password".as_bytes()));
 
-        let mut encrypted_file = EncryptedFile::with_content( FileHeader::new(&repo), "header", "content".as_bytes());
+        let mut encrypted_file = EncryptedFile::with_content(FileHeader::new(&repo.header), "header", "content".as_bytes());
         {
             encrypted_file.set_path(&dir.join("myfile"));
-            encrypted_file.save(pw.as_slice()).unwrap();
+            encrypted_file.save(&key).unwrap();
         }
         let ref header = encrypted_file.encryption_header;
         let path = encrypted_file.path.as_ref().unwrap();
-        let reloaded = EncryptedFile::load_head(header, pw.as_slice(), path).unwrap();
-        let content = EncryptedFile::load_content(header, pw.as_slice(), path).unwrap();
+        let reloaded = EncryptedFile::load_head(header, &key, path).unwrap();
+        let content = EncryptedFile::load_content(header, &key, path).unwrap();
         let contenttext = String::from_utf8(content).unwrap();
         assert_eq!("content", contenttext);
         assert_eq!("header", reloaded.header);
