@@ -1,7 +1,7 @@
 use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey, Algorithm, AES_256_GCM, CHACHA20_POLY1305};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
 use ring::constant_time::verify_slices_are_equal;
-use super::{EncryptionType, PasswordHashType, Repository, RepoHeader};
+use super::{EncryptionType, PasswordHashType, Repository};
 use std::time::{Instant};
 use chrono::Duration;
 
@@ -92,10 +92,10 @@ pub fn encrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u
     match alg {
         None => Ok(data.to_vec()),
         Some(a) => {
-            let key = SealingKey::new(a, key.as_slice()).map_err(|e| CryptError::KeyFailure)?;
+            let key = SealingKey::new(a, key.as_slice()).map_err(|_| CryptError::KeyFailure)?;
             let mut ciphertext = data.to_vec();
             ciphertext.resize(data.len() + enctype.hash_len(), 0);
-            seal_in_place(&key, nonce, additional, ciphertext.as_mut_slice(), enctype.hash_len()).map_err(|e| CryptError::EncryptFailue)?;
+            seal_in_place(&key, nonce, additional, ciphertext.as_mut_slice(), enctype.hash_len()).map_err(|_| CryptError::EncryptFailue)?;
             Ok(ciphertext)
         }
     }
@@ -106,9 +106,9 @@ pub fn decrypt(enctype: &EncryptionType, nonce: &[u8], key: &HashedPw, data: &[u
     match alg {
         None => Ok(data.to_vec()),
         Some(a) => {
-            let key = OpeningKey::new(a, key.as_slice()).map_err(|e| CryptError::KeyFailure)?;
+            let key = OpeningKey::new(a, key.as_slice()).map_err(|_| CryptError::KeyFailure)?;
             let mut ciphertext = data.to_vec();
-            open_in_place(&key, nonce, additional, 0, ciphertext.as_mut_slice()).map_err(|e| CryptError::DecryptFailue)?;
+            open_in_place(&key, nonce, additional, 0, ciphertext.as_mut_slice()).map_err(|_| CryptError::DecryptFailue)?;
             let content_length = ciphertext.len() - enctype.hash_len();
             ciphertext.resize(content_length, 0);
             Ok(ciphertext)
@@ -155,12 +155,10 @@ impl Repository {
     }
 
     pub fn hash_key_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: PlainPw) -> HashedPw {
-        let len = enc_type.key_len();
         HashedPw::new(pw_plain, enc_type, hash_type)
     }
 
     pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw: &HashedPw) -> DoubleHashedPw {
-        let len = enc_type.key_len();
         DoubleHashedPw::new(pw, enc_type, hash_type)
     }
 
@@ -181,9 +179,6 @@ impl Repository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ring_pwhash::scrypt::{scrypt, ScryptParams};
-    use rand::os::OsRng;
-    use rand::Rng;
     use super::{HashedPw, PlainPw};
     use super::super::{EncryptionType, PasswordHashType};
 
@@ -207,9 +202,9 @@ mod tests {
 
         println!("Input: {:?}", plaintext);
         println!("Data: {:?}", data);
-        let mut ciphertext = encrypt(&enctype, nonce.as_slice(), &hashed_key(), data, additional_data).unwrap();
+        let ciphertext = encrypt(&enctype, nonce.as_slice(), &hashed_key(), data, additional_data).unwrap();
         println!("Ciphertext: {:?}", ciphertext);
-        let mut ciphertext = ciphertext_mod(ciphertext);
+        let ciphertext = ciphertext_mod(ciphertext);
         println!("Ciphertext modified: {:?}", ciphertext);
         let decrypt_result = decrypt(&enctype, nonce.as_slice(), &hashed_key(), ciphertext.as_slice(), additional_mod(additional).as_bytes());
         if expect_error {
@@ -260,7 +255,6 @@ mod tests {
     #[test]
     fn modify_ciphertext() {
         let modifier = |mut v: Vec<u8>| {
-            let len = v.len();
             v[0] = 0;
             v
         };
@@ -269,6 +263,6 @@ mod tests {
 
     #[test]
     fn modify_additional_data() {
-        encrypt_decrypt(EncryptionType::RingChachaPoly1305, |e| e, true, |i| "bla");
+        encrypt_decrypt(EncryptionType::RingChachaPoly1305, |e| e, true, |_| "bla");
     }
 }

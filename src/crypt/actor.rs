@@ -4,7 +4,6 @@ use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use super::io::{ScanResult, scan, Error};
-use std::cell::RefCell;
 use super::crypt::{PlainPw, HashedPw};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -184,7 +183,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn open_repo() {
         let (temp, repo, pw) = create_temp_repo();
         let dir = temp.path().into();

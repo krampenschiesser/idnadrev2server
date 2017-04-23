@@ -33,7 +33,7 @@ impl From<io::Error> for Error {
 }
 
 impl From<FromUtf8Error> for Error {
-    fn from(a: FromUtf8Error) -> Self {
+    fn from(_: FromUtf8Error) -> Self {
         Error::ParseError(ParseError::InvalidUtf8)
     }
 }
@@ -45,7 +45,7 @@ impl From<ParseError> for Error {
 }
 
 impl From<notify::Error> for Error {
-    fn from(e: notify::Error) -> Self {
+    fn from(_: notify::Error) -> Self {
         Error::WatcherCreationError
     }
 }
@@ -108,7 +108,7 @@ impl TempFile {
     fn new() -> Self {
         let tempdir = std::env::temp_dir();
         let name = format!("{}", Uuid::new_v4().simple());
-        TempFile { path: tempdir.join(name) }
+        TempFile::new_in_path(tempdir.join(name))
     }
 
     fn new_in_path(path: PathBuf) -> Self {
@@ -118,12 +118,15 @@ impl TempFile {
 
 impl Drop for TempFile {
     fn drop(&mut self) {
-        remove_file(self.path.clone());
+        match remove_file(self.path.clone()) {
+            Err(d) => println!("Could not close temp file {}: {}", path_to_str(&self.path), d),
+            _ => (),
+        }
     }
 }
 
 impl Repository {
-    pub fn load(header: RepoHeader, path: PathBuf) -> Result<Self, Error> {
+    pub fn load(path: PathBuf) -> Result<Self, Error> {
         let mut f = File::open(path.clone())?;
         let mut v = Vec::new();
         f.read_to_end(&mut v)?;
@@ -137,13 +140,13 @@ impl Repository {
 
 impl EncryptedFile {
     pub fn load_head(header: &FileHeader, key: &HashedPw, path: &PathBuf) -> Result<Self, Error> {
-        let mut f = File::open(path.clone())?;
+        let f = File::open(path.clone())?;
         let mut f = f.take(header.byte_len() as u64 + header.header_length as u64);
         let mut v = Vec::new();
         f.read_to_end(&mut v)?;
         let mut c = Cursor::new(v.as_slice());
 
-        let mut additional = header.get_additional_data();
+        let additional = header.get_additional_data();
         c.set_position(header.byte_len() as u64);
 
         let mut buff = vec![0u8; header.header_length as usize];
@@ -163,11 +166,11 @@ impl EncryptedFile {
         f.read_to_end(&mut v)?;
         let mut c = Cursor::new(v.as_slice());
 
-        let mut additional = header.get_additional_data();
+        let additional = header.get_additional_data();
         c.set_position(header.byte_len() as u64 + header.header_length as u64);
 
         let mut buff = Vec::new();
-        c.read_to_end(&mut buff);
+        c.read_to_end(&mut buff)?;
 
         let plaintext = crypt::decrypt(&header.encryption_type, &header.nonce_content, key, buff.as_slice(), additional.as_slice())?;
         Ok(plaintext)
@@ -177,7 +180,7 @@ impl EncryptedFile {
         let path = self.path.as_ref().ok_or(Error::NoFilePath)?;
         let content = self.content.as_ref().ok_or(Error::NoFileContent)?;
 
-        let mut additional = self.encryption_header.get_additional_data();
+        let additional = self.encryption_header.get_additional_data();
 
         let ref mut header = self.encryption_header;
 
@@ -218,8 +221,8 @@ pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, Error> {
     let mut s = ScanResult::new(watcher, rx);
     for i in check_results {
         match i {
-            CheckRes::Repo(h, p) => {
-                let load = Repository::load(h, p);
+            CheckRes::Repo(_, p) => {
+                let load = Repository::load(p);
                 if load.is_ok() {
                     s.repositories.push(load.unwrap());
                 }
@@ -317,7 +320,7 @@ fn check_file_not_exists(id: &str, folder: &PathBuf) -> Result<(), Error> {
     let r = check_file_exists(id, folder);
     match r {
         Ok(_) => Err(Error::FileAlreadyExists(path_to_str(&main_path))),
-        Err(str) => Ok(())
+        Err(_) => Ok(())
     }
 }
 
@@ -354,7 +357,7 @@ fn check_json_file(path: &PathBuf) -> Result<MainHeader, Error> {
     let mut file = file.take(b64_len);
     let mut content = String::new();
     file.read_to_string(&mut content)?;
-    let decode = decode(&content).map_err(|e| Error::WrongPrefix)?;
+    let decode = decode(&content).map_err(|_| Error::WrongPrefix)?;
     let mut cursor = Cursor::new(decode.as_slice());
     let h = MainHeader::from_bytes(&mut cursor)?;
     Ok(h)
@@ -370,21 +373,20 @@ fn path_to_str(path: &PathBuf) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::*;
     use tempdir::TempDir;
     use super::super::crypt::PlainPw;
 
 
     #[test]
     fn file_existance() {
-        let mut dir = TempDir::new("file_existance").unwrap().into_path();
+        let dir = TempDir::new("file_existance").unwrap().into_path();
         let err = check_file_exists("4711", &dir);
         assert_eq!(Err(Error::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
 
         let err = check_plain_files_exist("4711", &dir);
         assert_eq!(Err(Error::FileDoesNotExist(path_to_str(&dir.join("4711.json")))), err);
         {
-            File::create(&dir.join("4711.json"));
+            File::create(&dir.join("4711.json")).unwrap();
         }
         let err = check_plain_files_exist("4711", &dir);
         assert_eq!(Err(Error::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
@@ -392,9 +394,9 @@ mod tests {
 
     #[test]
     fn no_file_exists() {
-        let mut dir = TempDir::new("file_not_existance").unwrap().into_path();
+        let  dir = TempDir::new("file_not_existance").unwrap().into_path();
         {
-            File::create(&dir.join("4711"));
+            File::create(&dir.join("4711")).unwrap();
         }
 
         let err = check_file_not_exists("4711", &dir);
@@ -404,7 +406,7 @@ mod tests {
         let err = check_plain_files_not_exist("4711", &dir);
         assert_eq!(Err(Error::FileAlreadyExists(path_to_str(&dir.join("4711")))), err);
         {
-            File::create(&dir.join("4711.json"));
+            File::create(&dir.join("4711.json")).unwrap();
         }
         let err = check_plain_files_not_exist("4711", &dir);
         assert_eq!(Err(Error::FileAlreadyExists(path_to_str(&dir.join("4711.json")))), err);
@@ -413,7 +415,7 @@ mod tests {
     #[test]
     fn bin_header_correct() {
         let header = MainHeader::new(FileVersion::FileV1);
-        let mut dir = TempDir::new("header").unwrap().into_path();
+        let dir = TempDir::new("header").unwrap().into_path();
         {
             let mut f = File::create(&dir.join("4711")).unwrap();
             let mut c = Vec::new();
@@ -427,7 +429,7 @@ mod tests {
     #[test]
     fn bin_header_wrong() {
         let header = MainHeader::new(FileVersion::FileV1);
-        let mut dir = TempDir::new("header").unwrap().into_path();
+        let dir = TempDir::new("header").unwrap().into_path();
         {
             let mut f = File::create(&dir.join("4711")).unwrap();
             let mut c = Vec::new();
@@ -442,7 +444,7 @@ mod tests {
     #[test]
     fn plain_header_correct() {
         let header = MainHeader::new(FileVersion::FileV1);
-        let mut dir = TempDir::new("header").unwrap().into_path();
+        let dir = TempDir::new("header").unwrap().into_path();
         {
             let mut f = File::create(&dir.join("4711.json")).unwrap();
             let mut c = Vec::new();
@@ -457,12 +459,12 @@ mod tests {
     #[test]
     fn plain_header_wrong() {
         let header = MainHeader::new(FileVersion::FileV1);
-        let mut dir = TempDir::new("header").unwrap().into_path();
+        let dir = TempDir::new("header").unwrap().into_path();
         {
             let mut f = File::create(&dir.join("4711.json")).unwrap();
             let mut c = Vec::new();
             header.to_bytes(&mut c);
-            let mut b64 = encode(c.as_slice()).replace("vq", "ee");
+            let b64 = encode(c.as_slice()).replace("vq", "ee");
             f.write_all(b64.as_bytes()).unwrap();
         }
         let res = check_file_prefix("4711", &dir, true);
@@ -471,7 +473,7 @@ mod tests {
 
     #[test]
     fn scan_folder() {
-        let mut dir = TempDir::new("scanfolder").unwrap().into_path();
+        let dir = TempDir::new("scanfolder").unwrap().into_path();
         {
             let mut repofile = File::create(&dir.join("repository")).unwrap();
             let mut file1 = File::create(&dir.join("file1")).unwrap();
@@ -481,17 +483,17 @@ mod tests {
             let repo_header = RepoHeader::new_for_test();
             let mut v = Vec::new();
             repo_header.to_bytes(&mut v);
-            repofile.write_all(v.as_slice());
+            repofile.write_all(v.as_slice()).unwrap();
 
             let mut v = Vec::new();
             FileHeader::new(&repo_header).to_bytes(&mut v);
-            file1.write_all(v.as_slice());
+            file1.write_all(v.as_slice()).unwrap();
 
             let mut v = Vec::new();
             FileHeader::new(&repo_header).to_bytes(&mut v);
-            file2.write_all(v.as_slice());
+            file2.write_all(v.as_slice()).unwrap();
 
-            file3.write_all("hello world".as_bytes());
+            file3.write_all("hello world".as_bytes()).unwrap();
         }
         let result: Vec<CheckRes> = super::scan_folder(&dir);
         assert_eq!(4, result.len());

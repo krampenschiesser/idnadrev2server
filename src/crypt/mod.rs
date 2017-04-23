@@ -1,8 +1,6 @@
-use std::fs::File;
-use std::io::{Cursor, Read};
+use std::io::{Cursor};
 use std::path::PathBuf;
 use uuid::Uuid;
-use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use rand::os::OsRng;
 use rand::Rng;
 use std;
