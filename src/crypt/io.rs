@@ -76,7 +76,7 @@ impl TempFile {
 impl Drop for TempFile {
     fn drop(&mut self) {
         match remove_file(self.path.clone()) {
-            Err(d) => println!("Could not close temp file {}: {}", path_to_str(&self.path), d),
+            Err(d) => error!("Could not close temp file {}: {}", path_to_str(&self.path), d),
             _ => (),
         }
     }

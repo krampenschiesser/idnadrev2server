@@ -131,7 +131,7 @@ impl PasswordHashType {
                 let now = Instant::now();
                 scrypt(input, input, &param, buff.as_mut_slice());
 
-                println!("Scrypt took {}s", Duration::from_std(now.elapsed()).unwrap().num_milliseconds());
+                debug!("Scrypt took {}s", Duration::from_std(now.elapsed()).unwrap().num_milliseconds());
                 buff
             }
             _ => unimplemented!()
@@ -187,19 +187,19 @@ mod tests {
 
     fn encrypt_decrypt<F, A>(enctype: EncryptionType, mut ciphertext_mod: F, expect_error: bool, additional_mod: A)
         where F: FnMut(Vec<u8>) -> Vec<u8>, A: Fn(&str) -> &str {
-        println!("Using: {:?}", enctype);
+        info!("Using: {:?}", enctype);
         let plaintext = "Hello Sauerland!";
         let additional = "Murks";
         let data = plaintext.as_bytes();
         let additional_data = additional.as_bytes();
         let nonce = nonce();
 
-        println!("Input: {:?}", plaintext);
-        println!("Data: {:?}", data);
+        info!("Input: {:?}", plaintext);
+        info!("Data: {:?}", data);
         let ciphertext = encrypt(&enctype, nonce.as_slice(), &hashed_key(), data, additional_data).unwrap();
-        println!("Ciphertext: {:?}", ciphertext);
+        info!("Ciphertext: {:?}", ciphertext);
         let ciphertext = ciphertext_mod(ciphertext);
-        println!("Ciphertext modified: {:?}", ciphertext);
+        info!("Ciphertext modified: {:?}", ciphertext);
         let decrypt_result = decrypt(&enctype, nonce.as_slice(), &hashed_key(), ciphertext.as_slice(), additional_mod(additional).as_bytes());
         if expect_error {
             match decrypt_result {
@@ -211,7 +211,7 @@ mod tests {
 
         let result_data = decrypt_result.unwrap();
         let result = String::from_utf8(result_data).unwrap();
-        println!("Result {:?}", result);
+        info!("Result {:?}", result);
 
         let mut ciphertext_shortened = ciphertext.clone();
         ciphertext_shortened.resize(data.len(), 0);

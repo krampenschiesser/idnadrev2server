@@ -55,7 +55,7 @@ impl<Command, Response, State> Actor<Command, Response, State>
     }
 
     pub fn run(&mut self) {
-        println!("Starting work loop");
+        info!("Starting work loop");
         let mut shutdown = false;
         let ref close_cmd = self.shutdown_command;
         while !shutdown {
@@ -100,7 +100,7 @@ mod tests {
     }
 
     fn handle(cmd: TestCmd, state: &mut State) -> Result<TestResponse, String> {
-        println!("Handling {:?}", cmd);
+        info!("Handling {:?}", cmd);
         {
             state.counter = state.counter + 1;
         }
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn communicate() {
         let state = State { counter: 0 };
-        println!("Communcation test!");
+        info!("Communcation test!");
         let (mut actor, control) = Actor::start(state, handle, TestCmd::Shutdown);
         thread::spawn(move || actor.run());
         let resp = control.send_sync(TestCmd::Hello).unwrap().unwrap();

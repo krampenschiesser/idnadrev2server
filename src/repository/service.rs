@@ -69,13 +69,13 @@ impl RepositoryService {
     }
 
     pub fn work_loop(&self) {
-        println!("Starting work loop");
+        info!("Starting work loop");
         let mut shutdown = false;
         while !shutdown {
             let result = self.receiver.recv();
             if result.is_ok() {
                 let (sender, cmd) = result.unwrap();
-                println!("Received command {:?}", cmd);
+                info!("Received command {:?}", cmd);
                 let id = Uuid::new_v4();
                 match cmd {
                     Cmd::CreateRepository(name) => {

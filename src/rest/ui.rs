@@ -7,7 +7,7 @@ use super::super::UiDir;
 
 #[get("/")]
 pub fn index(ui_dir: State<UiDir>) -> io::Result<NamedFile> {
-    println!("{:?}", ui_dir);
+    info!("{:?}", ui_dir);
     NamedFile::open(ui_dir.0.join("index.html"))
 }
 

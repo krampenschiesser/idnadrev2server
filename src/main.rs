@@ -51,9 +51,9 @@ fn tryservice() {
     let sender = access.get_sender();
 
     let t = thread::spawn(move || {
-        println!("Before work loop");
+        info!("Before work loop");
         service.work_loop();
-        println!("After work loop");
+        info!("After work loop");
     });
     let mut receivers = Vec::new();
     for i in 0..20 {
@@ -65,14 +65,14 @@ fn tryservice() {
     for r2 in receivers {
         let r: Response = r2.recv().unwrap();
         match r {
-            Response::CreatedRepository(id, name) => println!("Created repo {} with id {}", name, id),
-            _ => println!("other command"),
+            Response::CreatedRepository(id, name) => info!("Created repo {} with id {}", name, id),
+            _ => info!("other command"),
         }
     }
-    println!("Before stopping");
+    info!("Before stopping");
     access.stop();
-    println!("After stopping");
-    println!("Before joining");
+    info!("After stopping");
+    info!("Before joining");
     t.join();
 }
 
