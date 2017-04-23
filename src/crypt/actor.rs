@@ -271,8 +271,7 @@ mod tests {
     use std::io::Write;
     use super::super::crypt::{PlainPw, HashedPw};
     use spectral::prelude::*;
-    use std::time::Instant;
-    use chrono::Duration;
+    use std::time::{Instant, Duration};
 
     fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
         let tempdir = TempDir::new("temp_repo").unwrap();
@@ -335,14 +334,14 @@ mod tests {
         let token = state.generate_token();
 
         assert_eq!(true, state.check_token(&token));
-        let long_ago = Instant::now().sub(Duration::minutes(21).to_std().unwrap());
+        let long_ago = Instant::now().sub(Duration::new(21 * 60, 0));
         state.set_token_time(&token, long_ago);
         assert_eq!(false, state.check_token(&token));
 
         let token = state.generate_token();
         assert_eq!(false, state.check_token(&Uuid::new_v4()));
 
-        let long_ago = Instant::now().sub(Duration::minutes(5).to_std().unwrap());
+        let long_ago = Instant::now().sub(Duration::new(5 * 60, 0));
         state.set_token_time(&token, long_ago);
         state.check_token(&token);
 
