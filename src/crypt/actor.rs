@@ -71,20 +71,14 @@ pub enum CryptResponse {
     OptimisticLockError { file: FileDescriptor, file_version: u32 },
     NoSuchFile(FileDescriptor),
     AccessDenied,
+    InvalidToken(String),
     Error(String),
 }
 
 fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
     match &cmd {
         &CryptCmd::OpenRepository { ref id, ref pw } => open_repository(id, pw.as_slice(), state),
-        &CryptCmd::CloseRepository { ref id, ref token } => {
-            if state.check_token(token, id) {
-                close_repository(id, state);
-                Err("dooo".to_string())
-            } else {
-                invalid_token("Trying to close a repository", token)
-            }
-        }
+        &CryptCmd::CloseRepository { ref id, ref token } => close_repository(id, token, state),
         _ => Err("dooo".to_string())
     }
 }
@@ -92,7 +86,7 @@ fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
 fn invalid_token(msg: &str, token: &Uuid) -> Result<CryptResponse, String> {
     let ret = format!("No valid access token {}: {}", token, msg);
     warn!("{}", ret);
-    Ok(CryptResponse::Error(ret))
+    Ok(CryptResponse::InvalidToken(ret))
 }
 
 
@@ -148,6 +142,20 @@ impl State {
             Some(ref mut r) => Some(r.generate_token())
         }
     }
+
+    fn remove_token(&mut self, id: &Uuid, token: &Uuid) {
+        let no_tokens = match self.repositories.get_mut(id) {
+            None => false,
+            Some(ref mut r) => {
+                r.remove_token(token);
+                !r.has_tokens()
+            }
+        };
+        if no_tokens {
+            info!("All tokens removed, now closing repository {} with id {}", self.get_repository(id).unwrap().repo.name, id);
+            self.repositories.remove(id);
+        }
+    }
 }
 
 impl AccessToken {
@@ -172,6 +180,17 @@ impl RepositoryState {
         let retval = token.id.clone();
         self.tokens.insert(token.id.clone(), token);
         retval
+    }
+
+    fn remove_token(&mut self, token: &Uuid) {
+        match self.tokens.remove(token) {
+            None => warn!("No token {} present.", token),
+            Some(t) => debug!("Removed token {}", token),
+        }
+    }
+
+    fn has_tokens(&self) -> bool {
+        !self.tokens.is_empty()
     }
 
     fn check_token(&mut self, token: &Uuid) -> bool {
@@ -215,6 +234,7 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
 
         if hashed == existing.key {
             let token = existing.generate_token();
+            debug!("Generate new token for already opened repository {}. Token: {}", id, &token);
             Ok(CryptResponse::RepositoryOpened { token: token, id: id.clone() })
         } else {
             Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
@@ -228,6 +248,7 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
                     let mut repostate = create_repository_state(hashed_key, repo, &state.scan_result);
                     let token = repostate.generate_token();
                     state.add_repository(&id, repostate);
+                    debug!("Opened repository {} with token: {}", id, &token);
 
                     Ok(CryptResponse::RepositoryOpened { id: id.clone(), token: token })
                 } else {
@@ -256,8 +277,13 @@ fn create_repository_state(pw: HashedPw, repo: Repository, scan_result: &ScanRes
     repo_state
 }
 
-fn close_repository(id: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
-    Err("".into())
+fn close_repository(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
+    if state.check_token(token, id) {
+        state.remove_token(id, token);
+        Ok(CryptResponse::RepositoryIsClosed { id: id.clone() })
+    } else {
+        invalid_token("Trying to close a repository", token)
+    }
 }
 
 #[cfg(test)]
@@ -272,6 +298,7 @@ mod tests {
     use super::super::crypt::{PlainPw, HashedPw};
     use spectral::prelude::*;
     use std::time::{Instant, Duration};
+    use log4rs;
 
     fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
         let tempdir = TempDir::new("temp_repo").unwrap();
@@ -346,5 +373,46 @@ mod tests {
         state.check_token(&token);
 
         assert_that(&state.get_token_time(&token).elapsed().as_secs()).is_less_than(&10);
+    }
+
+    #[test]
+    fn close_repo() {
+        let (temp, repo, pw) = create_temp_repo();
+        let dir = temp.path().into();
+
+        let id = repo.get_id();
+        let mut state = crypt::actor::State::new(vec![dir]).unwrap();
+
+        let pw = "password".as_bytes();
+        let response = open_repository(&id, pw, &mut state).unwrap();
+        let token1 = match response {
+            CryptResponse::RepositoryOpened { token, id } => token,
+            _ => panic!("no result token"),
+        };
+        let response = open_repository(&id, pw, &mut state).unwrap();
+        let token2 = match response {
+            CryptResponse::RepositoryOpened { token, id } => token,
+            _ => panic!("no result token"),
+        };
+        assert_ne!(token1, token2);
+
+        let invalid_token = Uuid::new_v4();
+        let response = close_repository(&id, &invalid_token, &mut state).unwrap();
+        let result = match response {
+            CryptResponse::InvalidToken(_) => true,
+            _ => false
+        };
+        assert_eq!(true, result, "Should have an error invalid token, but did not!");
+
+        let response = close_repository(&id, &token1, &mut state).unwrap();
+        let result = match response {
+            CryptResponse::RepositoryIsClosed { id: res_id } => res_id == id,
+            _ => false
+        };
+        assert_eq!(true, result, "Should have received a close of repo, but did not!");
+
+        assert_eq!(1, state.repositories.len());
+        let response = close_repository(&id, &token2, &mut state).unwrap();
+        assert_eq!(0, state.repositories.len());
     }
 }
