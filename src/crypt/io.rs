@@ -518,10 +518,20 @@ mod tests {
         {
             File::create(path.clone()).unwrap();
         }
+        #[cfg(target_os="macos")]
+        {
+            let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+            match change {
+                DebouncedEvent::Create(p) => {
+                    assert_eq!(&tempdir.path(), &p, "not the expected tempdir path. expected {:?} but got {:?}", &&tempdir.path(), &p);
+                }
+                _ => panic!("received invalid notification {:?}", &change)
+            }
+        }
         let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
         match change {
             DebouncedEvent::Create(p) => {
-                assert_eq!(&path, &p, "not the expected path. expected {:?} but got {:?}", &path, &p);
+                assert_eq!(&path, &p, "not the expected creation path. expected {:?} but got {:?}", &path, &p);
             }
             _ => panic!("received invalid notification {:?}", &change)
         }
@@ -530,7 +540,7 @@ mod tests {
         let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
         match change {
             DebouncedEvent::NoticeRemove(p) => {
-                assert_eq!(&path, &p, "not the expected path. expected {:?} but got {:?}", &path, &p);
+                assert_eq!(&path, &p, "not the expected deletion path. expected {:?} but got {:?}", &path, &p);
             }
             _ => panic!("received invalid notification {:?}", &change)
         }
