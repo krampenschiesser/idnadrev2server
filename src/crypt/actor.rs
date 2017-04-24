@@ -9,6 +9,7 @@ use super::error::*;
 use std::time::Instant;
 use chrono::Duration;
 use std::ops::Sub;
+use std::ops::SubAssign;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct AccessToken {
@@ -236,6 +237,7 @@ impl RepositoryState {
         let mut t = self.tokens.get_mut(token).unwrap();
         t.last_access = time;
     }
+
     #[cfg(test)]
     fn get_token_time(&self, token: &Uuid) -> Instant {
         let t = self.tokens.get(token).unwrap();
@@ -396,13 +398,20 @@ mod tests {
         let token = state.generate_token();
 
         assert_eq!(true, state.check_token(&token));
-        let long_ago = Instant::now().sub(Duration::new(21 * 60, 0));
+        let mut long_ago = Instant::now();
+        for i in 0..21 {
+            long_ago.sub_assign(Duration::new(60, 0));
+        }
         state.set_token_time(&token, long_ago);
         assert_eq!(false, state.check_token(&token));
 
         let token = state.generate_token();
         assert_eq!(false, state.check_token(&Uuid::new_v4()));
 
+        let mut long_ago = Instant::now();
+        for i in 0..5 {
+            long_ago.sub_assign(Duration::new(60, 0));
+        }
         let long_ago = Instant::now().sub(Duration::new(5 * 60, 0));
         state.set_token_time(&token, long_ago);
         state.check_token(&token);
