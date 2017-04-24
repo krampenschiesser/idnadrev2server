@@ -10,6 +10,7 @@ use std::time::Instant;
 use chrono::Duration;
 use std::ops::Sub;
 use std::ops::SubAssign;
+use std::time;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct AccessToken {
@@ -390,6 +391,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os="linux")]
     fn test_token() {
         let header = RepoHeader::new_for_test();
         let repo = Repository::new("test", "hello".into(), header);
@@ -398,21 +400,14 @@ mod tests {
         let token = state.generate_token();
 
         assert_eq!(true, state.check_token(&token));
-        let mut long_ago = Instant::now();
-        for i in 0..21 {
-            long_ago.sub_assign(Duration::new(60, 0));
-        }
+        let mut long_ago = Instant::now() - Duration::from_secs(60 * 21);
         state.set_token_time(&token, long_ago);
         assert_eq!(false, state.check_token(&token));
 
         let token = state.generate_token();
         assert_eq!(false, state.check_token(&Uuid::new_v4()));
 
-        let mut long_ago = Instant::now();
-        for i in 0..5 {
-            long_ago.sub_assign(Duration::new(60, 0));
-        }
-        let long_ago = Instant::now().sub(Duration::new(5 * 60, 0));
+        let mut long_ago = Instant::now() - Duration::from_secs(5);
         state.set_token_time(&token, long_ago);
         state.check_token(&token);
 
