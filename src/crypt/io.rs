@@ -521,7 +521,7 @@ mod tests {
         let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
         match change {
             DebouncedEvent::Create(p) => {
-                assert_eq!(&p, &path);
+                assert_eq!(&path, &p, "not the expected path. expected {:?} but got {:?}", &path, &p);
             }
             _ => panic!("received invalid notification {:?}", &change)
         }
@@ -530,7 +530,7 @@ mod tests {
         let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
         match change {
             DebouncedEvent::NoticeRemove(p) => {
-                assert_eq!(&p, &path);
+                assert_eq!(&path, &p, "not the expected path. expected {:?} but got {:?}", &path, &p);
             }
             _ => panic!("received invalid notification {:?}", &change)
         }
