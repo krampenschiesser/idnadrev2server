@@ -336,7 +336,9 @@ mod tests {
     use super::*;
     use tempdir::TempDir;
     use super::super::crypt::PlainPw;
-
+    use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
 
     #[test]
     fn file_existance() {
@@ -501,5 +503,36 @@ mod tests {
         let contenttext = String::from_utf8(content).unwrap();
         assert_eq!("content", contenttext);
         assert_eq!("header", reloaded.header);
+    }
+
+    #[test]
+    fn file_watcher() {
+        let tempdir = TempDir::new("filewatcher").unwrap();
+
+        let (tx, rx) = channel();
+
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_millis(10)).unwrap();
+        watcher.watch(tempdir.path(), RecursiveMode::NonRecursive);
+
+        let path = tempdir.path().join("testfile");
+        {
+            File::create(path.clone()).unwrap();
+        }
+        let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+        match change {
+            DebouncedEvent::Create(p) => {
+                assert_eq!(&p, &path);
+            }
+            _ => panic!("received invalid notification {:?}", &change)
+        }
+        std::fs::remove_file(path.clone()).unwrap();
+
+        let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+        match change {
+            DebouncedEvent::NoticeRemove(p) => {
+                assert_eq!(&p, &path);
+            }
+            _ => panic!("received invalid notification {:?}", &change)
+        }
     }
 }
