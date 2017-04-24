@@ -339,6 +339,8 @@ mod tests {
     use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
     use std::sync::mpsc::channel;
     use std::time::Duration;
+    use std::path::Path;
+    use std::ffi::OsString;
 
     #[test]
     fn file_existance() {
@@ -518,20 +520,20 @@ mod tests {
         {
             File::create(path.clone()).unwrap();
         }
-        #[cfg(target_os="macos")]
+        #[cfg(target_os = "macos")]
         {
             let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
             match change {
                 DebouncedEvent::Create(p) => {
-                   info!("Got {}",p);
+                    info!("Got {}", p);
                 }
                 _ => panic!("received invalid notification {:?}", &change)
             }
         }
         let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
         match change {
-            DebouncedEvent::Create(p) => {
-                assert_eq!(&path, &p, "not the expected creation path. expected {:?} but got {:?}", &path, &p);
+            DebouncedEvent::Create(ref p) => {
+                assert_eq!(unwrap_filename(&path), unwrap_filename(p), "not the expected creation path. expected {:?} but got {:?}", unwrap_filename(&path), unwrap_filename(p));
             }
             _ => panic!("received invalid notification {:?}", &change)
         }
@@ -539,10 +541,14 @@ mod tests {
 
         let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
         match change {
-            DebouncedEvent::NoticeRemove(p) => {
-                assert_eq!(&path, &p, "not the expected deletion path. expected {:?} but got {:?}", &path, &p);
+            DebouncedEvent::NoticeRemove(ref p) => {
+                assert_eq!(unwrap_filename(&path), unwrap_filename(p), "not the expected deletion path. expected {:?} but got {:?}", unwrap_filename(&path), unwrap_filename(p));
             }
             _ => panic!("received invalid notification {:?}", &change)
         }
+    }
+
+    fn unwrap_filename(p: &Path) -> OsString {
+        p.to_path_buf().file_name().unwrap().to_os_string()
     }
 }
