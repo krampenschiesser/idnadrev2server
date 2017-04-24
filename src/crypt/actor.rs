@@ -50,7 +50,7 @@ pub enum CryptCmd {
     FileDeleted(PathBuf),
 
     ListRepositories,
-    ListFiles { token: Uuid, repository: Uuid },
+    ListFiles { token: Uuid, id: Uuid },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -62,7 +62,7 @@ pub enum CryptResponse {
     FileContent(FileHeader, Vec<u8>),
     Files(Vec<FileHeader>),
 
-    Repositories(RepositoryDescriptor),
+    Repositories(Vec<RepositoryDescriptor>),
 
     RepositoryOpened { token: Uuid, id: Uuid },
     RepositoryOpenFailed { id: Uuid },
@@ -79,6 +79,8 @@ fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
     match &cmd {
         &CryptCmd::OpenRepository { ref id, ref pw } => open_repository(id, pw.as_slice(), state),
         &CryptCmd::CloseRepository { ref id, ref token } => close_repository(id, token, state),
+        &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
+        &CryptCmd::ListRepositories => list_repositories(state),
         _ => Err("dooo".to_string())
     }
 }
@@ -106,15 +108,32 @@ struct State {
     scan_result: ScanResult,
 }
 
+impl FileHeader {
+    fn new(enc_file: &EncryptedFile) -> Self {
+        let ref h = enc_file.encryption_header;
+        let descriptor = FileDescriptor { repo: h.get_repository_id(), id: h.get_id(), version: h.get_version() };
+        FileHeader { header: enc_file.header.clone(), descriptor: descriptor }
+    }
+}
+
+impl RepositoryDescriptor {
+    fn new(repo: &Repository) -> Self {
+        RepositoryDescriptor { id: repo.get_id(), name: repo.name.clone() }
+    }
+}
+
 impl State {
     fn new(folders: Vec<PathBuf>) -> Result<Self, CryptError> {
         let result = scan(&folders)?;
         Ok(State { nonces: HashSet::new(), repositories: HashMap::new(), folders: Vec::new(), scan_result: result })
     }
-
+    fn get_repositories(&self) -> &Vec<Repository> {
+        self.scan_result.get_repositories()
+    }
     fn get_repository(&self, id: &Uuid) -> Option<&RepositoryState> {
         self.repositories.get(id)
     }
+
     fn get_repository_mut(&mut self, id: &Uuid) -> Option<&mut RepositoryState> {
         self.repositories.get_mut(id)
     }
@@ -286,6 +305,23 @@ fn close_repository(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptR
     }
 }
 
+fn list_files(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
+    if state.check_token(token, id) {
+        let repo = state.get_repository(id).unwrap();//unwrap because check_token returns false on no repo
+        let files: Vec<FileHeader> = repo.files.values().map(|f| FileHeader::new(f)).collect();
+
+        Ok(CryptResponse::Files(files))
+    } else {
+        invalid_token("Trying to close a repository", token)
+    }
+}
+
+
+fn list_repositories(state: &mut State) -> Result<CryptResponse, String> {
+    let repos: Vec<RepositoryDescriptor> = state.get_repositories().iter().map(|r| RepositoryDescriptor::new(r)).collect();
+    Ok(CryptResponse::Repositories(repos))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn open_repo() {
+    fn test_open_repo() {
         let (temp, repo, pw) = create_temp_repo();
         let dir = temp.path().into();
         let pw = "password".as_bytes();
@@ -353,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    fn token() {
+    fn test_token() {
         let header = RepoHeader::new_for_test();
         let repo = Repository::new("test", "hello".into(), header);
         let pw = repo.hash_key("hello".into());
@@ -376,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn close_repo() {
+    fn test_close_repo() {
         let (temp, repo, pw) = create_temp_repo();
         let dir = temp.path().into();
 
@@ -414,5 +450,46 @@ mod tests {
         assert_eq!(1, state.repositories.len());
         let response = close_repository(&id, &token2, &mut state).unwrap();
         assert_eq!(0, state.repositories.len());
+    }
+
+    #[test]
+    fn test_list_files() {
+        let (temp, repo, pw) = create_temp_repo();
+        let dir = temp.path().into();
+
+        let pw = "password".as_bytes();
+        let id = repo.get_id();
+        let mut state = crypt::actor::State::new(vec![dir]).unwrap();
+        let token = match open_repository(&id, pw, &mut state).unwrap() {
+            CryptResponse::RepositoryOpened { token, id } => token,
+            _ => panic!("no result token"),
+        };
+        let response = list_files(&id, &token, &mut state).unwrap();
+        match response {
+            CryptResponse::Files(f) => {
+                assert_eq!(1, f.len());
+                assert_eq!("test header".to_string(), f[0].header);
+            }
+            _ => panic!("Got invalid response {:?}", &response)
+        }
+    }
+
+    #[test]
+    fn test_list_repos() {
+        let (temp, repo, pw) = create_temp_repo();
+        let dir = temp.path().into();
+
+        let pw = "password".as_bytes();
+        let id = repo.get_id();
+        let mut state = crypt::actor::State::new(vec![dir]).unwrap();
+
+        let response = list_repositories(&mut state).unwrap();
+        match response {
+            CryptResponse::Repositories(v) => {
+                assert_eq!(1, v.len());
+                assert_eq!("Hallo Repo".to_string(), v[0].name);
+            }
+            _ => panic!("Got invalid response {:?}", &response)
+        }
     }
 }

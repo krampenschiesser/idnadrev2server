@@ -166,6 +166,10 @@ impl FileHeader {
         self.main_header.to_bytes(&mut v);
         v
     }
+
+    pub fn get_version(&self) -> u32 {
+        self.main_header.version
+    }
 }
 
 impl EncryptedFile {

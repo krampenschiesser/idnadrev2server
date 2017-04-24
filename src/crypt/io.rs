@@ -56,6 +56,10 @@ impl ScanResult {
         }
     }
 
+    pub fn get_repositories(&self) -> &Vec<Repository> {
+        &self.repositories
+    }
+
     pub fn get_files_for_repo(&self, repo_id: &Uuid) -> Vec<(FileHeader, PathBuf)> {
         self.files.iter().filter(|ref t| t.0.get_repository_id() == *repo_id).map(|e| e.clone()).collect()
     }
