@@ -44,13 +44,12 @@ pub enum CryptCmd {
 
     OpenRepository { id: Uuid, pw: Vec<u8> },
     CloseRepository { token: Uuid, id: Uuid },
+    ListRepositories,
+    ListFiles { token: Uuid, id: Uuid },
 
     FileAdded(PathBuf),
     FileChanged(PathBuf),
     FileDeleted(PathBuf),
-
-    ListRepositories,
-    ListFiles { token: Uuid, id: Uuid },
 }
 
 #[derive(Debug, PartialEq, Eq)]
