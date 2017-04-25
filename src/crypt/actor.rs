@@ -18,14 +18,14 @@ struct AccessToken {
     id: Uuid,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileDescriptor {
     repo: Uuid,
     id: Uuid,
     version: u32,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileHeaderDescriptor {
     descriptor: FileDescriptor,
     header: String,
@@ -41,7 +41,7 @@ pub struct RepositoryDescriptor {
 pub enum CryptCmd {
     CreateNewFile { token: Uuid, header: String, content: Vec<u8>, repo: Uuid },
     UpdateHeader { token: Uuid, header: String, file: FileDescriptor },
-    UpdateContent { token: Uuid, content: Vec<u8>, file: FileDescriptor },
+    UpdateFile { token: Uuid, header: String, content: Vec<u8>, file: FileDescriptor },
     DeleteFile { token: Uuid, file: FileDescriptor },
 
     OpenRepository { id: Uuid, pw: Vec<u8> },
@@ -346,6 +346,30 @@ fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &U
         file.save(&repostate.key);
 
         Ok(CryptResponse::FileCreated(FileDescriptor::new(&file.encryption_header)))
+    } else {
+        invalid_token("Trying to create file with invalid token", token)
+    }
+}
+
+fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &String, state: &mut State) -> Result<CryptResponse, String> {
+    let file_id = &file_descriptor.id;
+    if state.check_token(token, file_id) {
+        let repostate = state.get_repository(file_id).unwrap();
+        let o = repostate.files.get(file_id);
+
+        let cloned_descriptor: FileDescriptor = file_descriptor.clone();
+        match o {
+            Some(file) => {
+                let current_version = file.encryption_header.get_version();
+                if current_version <= file_descriptor.version {
+                    //fimxe update header
+                    Ok(CryptResponse::AccessDenied)
+                } else {
+                    Ok(CryptResponse::OptimisticLockError { file: cloned_descriptor, file_version: current_version })
+                }
+            }
+            None => Ok(CryptResponse::NoSuchFile(cloned_descriptor))
+        }
     } else {
         invalid_token("Trying to create file with invalid token", token)
     }

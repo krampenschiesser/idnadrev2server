@@ -529,7 +529,7 @@ mod tests {
             let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
             match change {
                 DebouncedEvent::Create(p) => {
-                    info!("Got {}", p);
+                    info!("Got {:?}", p);
                 }
                 _ => panic!("received invalid notification {:?}", &change)
             }
