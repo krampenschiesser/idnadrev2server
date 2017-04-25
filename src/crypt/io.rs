@@ -199,17 +199,21 @@ pub fn scan_folder(folder: &PathBuf) -> Vec<CheckRes> {
     match folder.read_dir() {
         Err(_) => Vec::new(),
         Ok(file_iter) => {
-            let results: Vec<CheckRes> = file_iter.map(|file| check_map_file(file)).filter(|r| r.is_ok()).map(|r| r.unwrap()).collect();
+            let results: Vec<CheckRes> = file_iter.map(|file| check_map_dir_entry(file)).filter(|r| r.is_ok()).map(|r| r.unwrap()).collect();
             results
         }
     }
 }
 
-fn check_map_file(dir_entry: Result<DirEntry, io::Error>) -> Result<CheckRes, ()> {
+fn check_map_dir_entry(dir_entry: Result<DirEntry, io::Error>) -> Result<CheckRes, ()> {
     if dir_entry.is_err() {
         return Err(());
     }
     let path = dir_entry.unwrap().path();
+    check_map_path(&path)
+}
+
+pub fn check_map_path(path: &PathBuf) -> Result<CheckRes, ()> {
     let ext = path.extension();
     let is_json_file = match ext {
         Some(extension) => extension == ".json",

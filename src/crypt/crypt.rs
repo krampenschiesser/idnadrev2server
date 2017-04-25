@@ -5,6 +5,7 @@ use super::{EncryptionType, PasswordHashType, Repository};
 use std::time::{Instant};
 use chrono::Duration;
 use super::error::*;
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct PlainPw {
@@ -178,6 +179,10 @@ impl Repository {
     pub fn check_hashed_key(&self, pw: &HashedPw) -> bool {
         let double = self.hash_pw(&pw);
         double == self.hash
+    }
+
+    pub fn get_path(&self) -> Option<PathBuf> {
+        self.path.clone()
     }
 }
 

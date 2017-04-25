@@ -1,5 +1,5 @@
 use super::super::actor::{Actor, ActorControl};
-use super::{RepoHeader, Repository, EncryptedFile};
+use super::{RepoHeader, Repository, EncryptedFile, FileHeader};
 use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -26,7 +26,7 @@ pub struct FileDescriptor {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct FileHeader {
+pub struct FileHeaderDescriptor {
     descriptor: FileDescriptor,
     header: String,
 }
@@ -39,7 +39,7 @@ pub struct RepositoryDescriptor {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CryptCmd {
-    CreateNewFile { token: Uuid, header: String, content: Vec<u8>, repo: RepoHeader },
+    CreateNewFile { token: Uuid, header: String, content: Vec<u8>, repo: Uuid },
     UpdateHeader { token: Uuid, header: String, file: FileDescriptor },
     UpdateContent { token: Uuid, content: Vec<u8>, file: FileDescriptor },
     DeleteFile { token: Uuid, file: FileDescriptor },
@@ -59,15 +59,16 @@ pub enum CryptResponse {
     FileCreated(FileDescriptor),
     FileDeleted(FileDescriptor),
 
-    File(FileHeader),
-    FileContent(FileHeader, Vec<u8>),
-    Files(Vec<FileHeader>),
+    File(FileHeaderDescriptor),
+    FileContent(FileHeaderDescriptor, Vec<u8>),
+    Files(Vec<FileHeaderDescriptor>),
 
     Repositories(Vec<RepositoryDescriptor>),
 
     RepositoryOpened { token: Uuid, id: Uuid },
     RepositoryOpenFailed { id: Uuid },
     RepositoryIsClosed { id: Uuid },
+    NoSuchRepository { id: Uuid },
 
     OptimisticLockError { file: FileDescriptor, file_version: u32 },
     NoSuchFile(FileDescriptor),
@@ -82,6 +83,7 @@ fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
         &CryptCmd::CloseRepository { ref id, ref token } => close_repository(id, token, state),
         &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
         &CryptCmd::ListRepositories => list_repositories(state),
+        &CryptCmd::CreateNewFile { ref token, ref header, ref content, ref repo } => create_new_file(token, header, content, repo, state),
         _ => Err("dooo".to_string())
     }
 }
@@ -109,11 +111,17 @@ struct State {
     scan_result: ScanResult,
 }
 
-impl FileHeader {
+impl FileDescriptor {
+    fn new(header: &FileHeader) -> Self {
+        FileDescriptor { repo: header.get_repository_id(), id: header.get_id(), version: header.get_version() }
+    }
+}
+
+impl FileHeaderDescriptor {
     fn new(enc_file: &EncryptedFile) -> Self {
         let ref h = enc_file.encryption_header;
         let descriptor = FileDescriptor { repo: h.get_repository_id(), id: h.get_id(), version: h.get_version() };
-        FileHeader { header: enc_file.header.clone(), descriptor: descriptor }
+        FileHeaderDescriptor { header: enc_file.header.clone(), descriptor: descriptor }
     }
 }
 
@@ -310,11 +318,11 @@ fn close_repository(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptR
 fn list_files(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, id) {
         let repo = state.get_repository(id).unwrap();//unwrap because check_token returns false on no repo
-        let files: Vec<FileHeader> = repo.files.values().map(|f| FileHeader::new(f)).collect();
+        let files: Vec<FileHeaderDescriptor> = repo.files.values().map(|f| FileHeaderDescriptor::new(f)).collect();
 
         Ok(CryptResponse::Files(files))
     } else {
-        invalid_token("Trying to close a repository", token)
+        invalid_token("Trying to list files of an unknown repository", token)
     }
 }
 
@@ -322,6 +330,25 @@ fn list_files(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptRespons
 fn list_repositories(state: &mut State) -> Result<CryptResponse, String> {
     let repos: Vec<RepositoryDescriptor> = state.get_repositories().iter().map(|r| RepositoryDescriptor::new(r)).collect();
     Ok(CryptResponse::Repositories(repos))
+}
+
+
+fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
+    if state.check_token(token, repo_id) {
+        let repostate = state.get_repository(repo_id).unwrap();
+        let ref repo = repostate.repo;
+        let fh = FileHeader::new(&repo.header);
+        let file_id = fh.get_id();
+        let mut file = EncryptedFile::new(fh, header);
+        file.set_content(content);
+        let file_path = repo.get_path().unwrap().join(format!("{}", file_id.simple()));
+        file.set_path(&file_path);
+        file.save(&repostate.key);
+
+        Ok(CryptResponse::FileCreated(FileDescriptor::new(&file.encryption_header)))
+    } else {
+        invalid_token("Trying to create file with invalid token", token)
+    }
 }
 
 #[cfg(test)]
@@ -337,6 +364,7 @@ mod tests {
     use spectral::prelude::*;
     use std::time::{Instant, Duration};
     use log4rs;
+    use crypt::io::{check_map_path, CheckRes};
 
     fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
         let tempdir = TempDir::new("temp_repo").unwrap();
@@ -391,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os="linux")]
+    #[cfg(target_os = "linux")]
     fn test_token() {
         let header = RepoHeader::new_for_test();
         let repo = Repository::new("test", "hello".into(), header);
@@ -423,16 +451,8 @@ mod tests {
         let mut state = crypt::actor::State::new(vec![dir]).unwrap();
 
         let pw = "password".as_bytes();
-        let response = open_repository(&id, pw, &mut state).unwrap();
-        let token1 = match response {
-            CryptResponse::RepositoryOpened { token, id } => token,
-            _ => panic!("no result token"),
-        };
-        let response = open_repository(&id, pw, &mut state).unwrap();
-        let token2 = match response {
-            CryptResponse::RepositoryOpened { token, id } => token,
-            _ => panic!("no result token"),
-        };
+        let token1 = open_repo_get_token(&id, pw, &mut state);
+        let token2 = open_repo_get_token(&id, pw, &mut state);
         assert_ne!(token1, token2);
 
         let invalid_token = Uuid::new_v4();
@@ -455,6 +475,14 @@ mod tests {
         assert_eq!(0, state.repositories.len());
     }
 
+    fn open_repo_get_token(id: &Uuid, pw: &[u8], state: &mut State) -> Uuid {
+        let response = open_repository(id, pw, state);
+        match response.unwrap() {
+            CryptResponse::RepositoryOpened { token, id } => token.clone(),
+            _ => panic!("no result token"),
+        }
+    }
+
     #[test]
     fn test_list_files() {
         let (temp, repo, pw) = create_temp_repo();
@@ -463,10 +491,7 @@ mod tests {
         let pw = "password".as_bytes();
         let id = repo.get_id();
         let mut state = crypt::actor::State::new(vec![dir]).unwrap();
-        let token = match open_repository(&id, pw, &mut state).unwrap() {
-            CryptResponse::RepositoryOpened { token, id } => token,
-            _ => panic!("no result token"),
-        };
+        let token = open_repo_get_token(&id, pw, &mut state);
         let response = list_files(&id, &token, &mut state).unwrap();
         match response {
             CryptResponse::Files(f) => {
@@ -493,6 +518,45 @@ mod tests {
                 assert_eq!("Hallo Repo".to_string(), v[0].name);
             }
             _ => panic!("Got invalid response {:?}", &response)
+        }
+    }
+
+    #[test]
+    fn test_add_file() {
+        let (temp, repo, pw) = create_temp_repo();
+        let dir = temp.path().to_path_buf();
+
+        let pw = "password".as_bytes();
+        let id = repo.get_id();
+        let mut state = crypt::actor::State::new(vec![dir.clone()]).unwrap();
+
+        let token = open_repo_get_token(&id, &pw, &mut state);
+
+        let response = create_new_file(&token, &"test header 2".to_string(), &"content2".as_bytes().to_vec(), &id, &mut state).unwrap();
+        let file_id = match response {
+            CryptResponse::FileCreated(d) => {
+                assert_eq!(0, d.version);
+                assert_eq!(&id, &d.repo);
+                d.id
+            }
+            _ => panic!("Got invalid response {:?}", &response)
+        };
+
+        let mut found = false;
+        for file in dir.read_dir().unwrap() {
+            let result = check_map_path(&file.unwrap().path());
+            info!("Found {:?}", &result);
+            match result {
+                Err(_) => {}
+                Ok(c) => match c {
+                    _ => {}
+                    CheckRes::File(h, _) => {
+                        if h.get_id() == file_id {
+                            found = true;
+                        }
+                    }
+                }
+            }
         }
     }
 }
