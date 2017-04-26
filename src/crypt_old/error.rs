@@ -20,25 +20,6 @@ pub enum CryptError {
     OptimisticLockError(u32),
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum RingError {
-    KeyFailure,
-    DecryptFailue,
-    EncryptFailue,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum ParseError {
-    WrongValue(u64, u8),
-    IllegalPos(u64),
-    InvalidUtf8(String),
-    IoError(String),
-    NoPrefix,
-    NoValidUuid(u64),
-    UnknownFileVersion(u8),
-    InvalidFileVersion(FileVersion),
-}
-
 impl Display for CryptError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
@@ -85,6 +66,13 @@ impl From<RingError> for CryptError {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum RingError {
+    KeyFailure,
+    DecryptFailue,
+    EncryptFailue,
+}
+
 impl Display for RingError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
@@ -93,6 +81,19 @@ impl Display for RingError {
             RingError::EncryptFailue => write!(f, "Error happened during encryption"),
         }
     }
+}
+
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum ParseError {
+    WrongValue(u64, u8),
+    IllegalPos(u64),
+    InvalidUtf8(String),
+    IoError(String),
+    NoPrefix,
+    NoValidUuid(u64),
+    UnknownFileVersion(u8),
+    InvalidFileVersion(FileVersion),
 }
 
 impl Display for ParseError {
@@ -109,6 +110,7 @@ impl Display for ParseError {
         }
     }
 }
+
 
 impl From<std::string::FromUtf8Error> for ParseError {
     fn from(e: std::string::FromUtf8Error) -> Self {

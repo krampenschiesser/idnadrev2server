@@ -1,9 +1,9 @@
 use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey, Algorithm, AES_256_GCM, CHACHA20_POLY1305};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
 use ring::constant_time::verify_slices_are_equal;
-use super::{EncryptionType, PasswordHashType, Repository};
 use std::time::{Instant};
 use chrono::Duration;
+use super::{EncryptionType, PasswordHashType, Repository};
 use super::error::*;
 use std::path::PathBuf;
 
