@@ -353,25 +353,39 @@ fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &U
 
 fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &String, state: &mut State) -> Result<CryptResponse, String> {
     let file_id = &file_descriptor.id;
-    if state.check_token(token, file_id) {
-        let repostate = state.get_repository(file_id).unwrap();
-        let o = repostate.files.get(file_id);
+    let result = if state.check_token(token, file_id) {
+        let mut repostate = state.get_repository_mut(file_id).unwrap();
+        let mut o = repostate.files.get_mut(file_id);
 
         let cloned_descriptor: FileDescriptor = file_descriptor.clone();
         match o {
             Some(file) => {
                 let current_version = file.encryption_header.get_version();
                 if current_version <= file_descriptor.version {
-                    //fimxe update header
-                    Ok(CryptResponse::AccessDenied)
+                    let mut cloned = file.clone();
+                    cloned.set_header(header);
+                    match cloned.update_header(&repostate.key) {
+                        Ok(_) => Ok(file.get_path().unwrap()),
+                        Err(e) => {
+                            let error = format!("Could not update header of {} : {:?}", cloned.get_id(), e);
+                            error!("{}", error);
+                            Err(CryptResponse::Error(error.to_string()))
+                        }
+                    }
                 } else {
-                    Ok(CryptResponse::OptimisticLockError { file: cloned_descriptor, file_version: current_version })
+                    Err(CryptResponse::OptimisticLockError { file: cloned_descriptor, file_version: current_version })
                 }
             }
-            None => Ok(CryptResponse::NoSuchFile(cloned_descriptor))
+            None => Err(CryptResponse::NoSuchFile(cloned_descriptor))
         }
     } else {
-        invalid_token("Trying to create file with invalid token", token)
+        let ret = format!("No valid access token {}: {}", token, "Trying to create file with invalid token");
+        warn!("{}", ret);
+        Err(CryptResponse::InvalidToken(ret))
+    };
+    match result {
+        Ok(path) => handle(CryptCmd::FileChanged(path), state),
+        Err(response) => Ok(response)
     }
 }
 

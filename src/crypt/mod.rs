@@ -193,6 +193,22 @@ impl EncryptedFile {
     pub fn get_id(&self) -> Uuid {
         self.encryption_header.get_id()
     }
+
+    pub fn set_header(&mut self, header: &str) {
+        self.header = header.to_string();
+    }
+
+    pub fn increment_version(&mut self) {
+        self.encryption_header.main_header.version += 1;
+    }
+
+    pub fn get_version(&self) -> u32 {
+        self.encryption_header.get_version()
+    }
+
+    pub fn get_path(&self) -> Option<PathBuf> {
+        self.path.clone()
+    }
 }
 
 impl Repository {

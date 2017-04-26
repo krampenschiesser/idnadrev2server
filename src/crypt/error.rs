@@ -1,7 +1,7 @@
 use std;
 use std::io;
 use std::string::FromUtf8Error;
-use std::fmt::{Display,Formatter};
+use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::error::Error;
 use notify;
@@ -13,24 +13,26 @@ pub enum CryptError {
     WrongPrefix,
     IOError(String),
     ParseError(ParseError),
-    WatcherCreationError,
+    WatcherCreationError(String),
     RingError(RingError),
     NoFilePath,
     NoFileContent,
+    OptimisticLockError(u32),
 }
 
 impl Display for CryptError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            CryptError::FileAlreadyExists(ref name) => write!(f, "File {} already exists.",name),
-            CryptError::FileDoesNotExist(ref name) => write!(f, "File {} does not exist.",name),
+            CryptError::FileAlreadyExists(ref name) => write!(f, "File {} already exists.", name),
+            CryptError::FileDoesNotExist(ref name) => write!(f, "File {} does not exist.", name),
             CryptError::WrongPrefix => write!(f, "Wrong binary prefix for file."),
-            CryptError::IOError(ref description) => write!(f, "IO Error happened: {}",description),
-            CryptError::ParseError(ref e) => write!(f, "Parsing error occured: {}",e),
-            CryptError::WatcherCreationError => write!(f, "Could not create file watcher!"),
-            CryptError::RingError(ref e) => write!(f, "Error happened during encryption/decryption: {}",e),
+            CryptError::IOError(ref description) => write!(f, "IO Error happened: {}", description),
+            CryptError::ParseError(ref e) => write!(f, "Parsing error occured: {}", e),
+            CryptError::WatcherCreationError(ref e) => write!(f, "Could not create file watcher! {}", e),
+            CryptError::RingError(ref e) => write!(f, "Error happened during encryption/decryption: {}", e),
             CryptError::NoFilePath => write!(f, "No such file path"),
             CryptError::NoFileContent => write!(f, "No file content"),
+            CryptError::OptimisticLockError(file_version) => write!(f, "File has newer version than self: {}", file_version),
         }
     }
 }
@@ -54,8 +56,8 @@ impl From<ParseError> for CryptError {
 }
 
 impl From<notify::Error> for CryptError {
-    fn from(_: notify::Error) -> Self {
-        CryptError::WatcherCreationError
+    fn from(e: notify::Error) -> Self {
+        CryptError::WatcherCreationError(e.description().into())
     }
 }
 
@@ -75,8 +77,8 @@ pub enum RingError {
 impl Display for RingError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            RingError::KeyFailure=> write!(f, "Something is wrong with the key, maybe length?"),
-            RingError::DecryptFailue=> write!(f, "Error happened during decryption"),
+            RingError::KeyFailure => write!(f, "Something is wrong with the key, maybe length?"),
+            RingError::DecryptFailue => write!(f, "Error happened during decryption"),
             RingError::EncryptFailue => write!(f, "Error happened during encryption"),
         }
     }
@@ -97,7 +99,7 @@ pub enum ParseError {
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            ParseError::WrongValue(ref pos,ref  val) => write!(f, "Wrong value '{}' at pos {}", val, pos),
+            ParseError::WrongValue(ref pos, ref val) => write!(f, "Wrong value '{}' at pos {}", val, pos),
             ParseError::IllegalPos(ref pos) => write!(f, "Illegal position {}", pos),
             ParseError::InvalidUtf8(ref e) => write!(f, "No valid utf8: {}", e),
             ParseError::IoError(ref description) => write!(f, "IO Error happened: {}", description),
