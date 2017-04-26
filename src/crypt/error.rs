@@ -5,12 +5,12 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::error::Error;
 use notify;
+use super::FileVersion;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CryptError {
     FileAlreadyExists(String),
     FileDoesNotExist(String),
-    WrongPrefix,
     IOError(String),
     ParseError(ParseError),
     WatcherCreationError(String),
@@ -25,7 +25,6 @@ impl Display for CryptError {
         match *self {
             CryptError::FileAlreadyExists(ref name) => write!(f, "File {} already exists.", name),
             CryptError::FileDoesNotExist(ref name) => write!(f, "File {} does not exist.", name),
-            CryptError::WrongPrefix => write!(f, "Wrong binary prefix for file."),
             CryptError::IOError(ref description) => write!(f, "IO Error happened: {}", description),
             CryptError::ParseError(ref e) => write!(f, "Parsing error occured: {}", e),
             CryptError::WatcherCreationError(ref e) => write!(f, "Could not create file watcher! {}", e),
@@ -94,6 +93,7 @@ pub enum ParseError {
     NoPrefix,
     NoValidUuid(u64),
     UnknownFileVersion(u8),
+    InvalidFileVersion(FileVersion),
 }
 
 impl Display for ParseError {
@@ -106,6 +106,7 @@ impl Display for ParseError {
             ParseError::NoPrefix => write!(f, "No prefix present"),
             ParseError::NoValidUuid(ref pos) => write!(f, "No valid uuid at {}", pos),
             ParseError::UnknownFileVersion(ref version) => write!(f, "Unknown file version {}", version),
+            ParseError::InvalidFileVersion(ref version) => write!(f, "Invalid file version {}", version),
         }
     }
 }

@@ -1,9 +1,9 @@
 use super::super::actor::{Actor, ActorControl};
-use super::{RepoHeader, Repository, EncryptedFile, FileHeader};
+use super::{RepoHeader, Repository, EncryptedFile, FileHeader, FileVersion};
 use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use super::io::{ScanResult, scan, path_to_str};
+use super::io::{ScanResult, scan, path_to_str, read_file_header, read_repo_header};
 use super::crypt::{PlainPw, HashedPw};
 use super::error::*;
 use std::time::Instant;
@@ -11,6 +11,7 @@ use chrono::Duration;
 use std::ops::Sub;
 use std::ops::SubAssign;
 use std::time;
+use log::LogLevel;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct AccessToken {
@@ -75,6 +76,8 @@ pub enum CryptResponse {
     AccessDenied,
     InvalidToken(String),
     Error(String),
+
+    UnrecognizedFile(String),
 }
 
 fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
@@ -84,9 +87,9 @@ fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
         &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
         &CryptCmd::ListRepositories => list_repositories(state),
         &CryptCmd::CreateNewFile { ref token, ref header, ref content, ref repo } => create_new_file(token, header, content, repo, state),
-        &CryptCmd::FileAdded(ref path) => file_added(path,state),
-        &CryptCmd::FileChanged(ref path) => file_changed(path,state),
-        &CryptCmd::FileDeleted(ref path) => file_deleted(path,state),
+        &CryptCmd::FileAdded(ref path) => file_added(path, state),
+        &CryptCmd::FileChanged(ref path) => file_changed(path, state),
+        &CryptCmd::FileDeleted(ref path) => file_deleted(path, state),
         _ => Err("dooo".to_string())
     }
 }
@@ -194,6 +197,28 @@ impl State {
             self.repositories.remove(id);
         }
     }
+
+    fn update_file(&mut self, file_header: FileHeader, path: PathBuf) -> Result<(), String> {
+        let file_id = file_header.get_id();
+        let added = self.scan_result.update_file(&file_header, &path);
+        let repo_id = file_header.get_repository_id();
+
+        match self.repositories.get_mut(&repo_id) {
+            Some(ref mut repo) => {
+                let repo_enc_type = repo.repo.header.encryption_type.clone();
+                let file_enc_type = file_header.encryption_type.clone();
+                if repo_enc_type != file_enc_type {
+                    Err(format!("Cannot add file with different encryption type. Repository: {}, file: {}", repo_enc_type, file_enc_type))
+                } else {
+                    repo.update_file(file_header.clone(), path);
+                    Ok(())
+                }
+            }
+            None => {
+                Err(format!("Found no repository for {}", repo_id))
+            }
+        }
+    }
 }
 
 impl AccessToken {
@@ -248,6 +273,21 @@ impl RepositoryState {
                     true
                 }
             }
+        }
+    }
+
+    pub fn get_file(&self, id: &Uuid) -> Option<&EncryptedFile> {
+        self.files.get(id)
+    }
+
+    pub fn update_file(&mut self, header: FileHeader, path: PathBuf) -> Result<(), CryptError> {
+        let file = EncryptedFile::load_head(&header, &self.key, &path)?;
+        let existing_version = self.files.get(&header.get_id()).map_or(0, |f| f.get_version());
+        if existing_version <= header.get_version() {
+            self.files.insert(header.get_id(), file);
+            Ok(())
+        } else {
+            Err(CryptError::OptimisticLockError(existing_version))
         }
     }
 
@@ -351,7 +391,7 @@ fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &U
         let file_id = fh.get_id();
         let mut file = EncryptedFile::new(fh, header);
         file.set_content(content);
-        let file_path = repo.get_path().unwrap().join(format!("{}", file_id.simple()));
+        let file_path = repo.get_folder().unwrap().join(format!("{}", file_id.simple()));
         file.set_path(&file_path);
         file.save(&repostate.key);
         info!("Successfully created new file {} in {}", file_id, path_to_str(&file_path));
@@ -404,6 +444,62 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
         Ok(path) => handle(CryptCmd::FileChanged(path), state),
         Err(response) => Ok(response)
     }
+}
+
+fn unrecognized_file(msg: String, level: LogLevel) -> Result<CryptResponse, String> {
+    log!(level, "{}", msg);
+    Ok(CryptResponse::UnrecognizedFile(msg))
+}
+
+fn file_added(path: &PathBuf, state: &mut State) -> Result<CryptResponse, String> {
+    create_or_update_file(path, state, true)
+}
+
+fn create_or_update_file(path: &PathBuf, state: &mut State, create: bool) -> Result<CryptResponse, String> {
+    let result = read_file_header(path).unwrap();
+    match read_file_header(path) {
+        Ok(file_header) => {
+            let id = file_header.get_id();
+            let repo_id = file_header.get_repository_id();
+            let version = file_header.get_version();
+
+            let descriptor = FileDescriptor::new(&file_header);
+            state.update_file(file_header, path.clone())?;
+
+            if create {
+                Ok(CryptResponse::FileCreated(descriptor))
+            } else {
+                let header = state.get_repository(&repo_id).unwrap().get_file(&id).unwrap().get_header().to_string();
+                let descriptor = FileHeaderDescriptor { header: header, descriptor: descriptor };
+                Ok(CryptResponse::File(descriptor))
+            }
+        }
+        Err(CryptError::ParseError(ParseError::NoPrefix)) => {
+            unrecognized_file(format!("Ignoring {}  because it has no matching prefix.", path_to_str(path)), LogLevel::Debug)
+        }
+        Err(CryptError::ParseError(ParseError::InvalidFileVersion(file_version))) => {
+            if file_version == FileVersion::RepositoryV1 {
+                let repo_result = read_repo_header(path);
+                match repo_result {
+                    _ => unimplemented!()
+                }
+            } else {
+                unrecognized_file(format!("Ignoring {} because it has an unkown file version.", path_to_str(path)), LogLevel::Warn)
+            }
+        }
+        Err(CryptError::ParseError(ParseError::UnknownFileVersion(v))) => {
+            unrecognized_file(format!("Ignoring {} because it has an unkown file version {}.", path_to_str(path), v), LogLevel::Warn)
+        }
+        _ => unrecognized_file(format!("Ignoring {} because of general read error: {:?}", path_to_str(path), result), LogLevel::Error)
+    }
+}
+
+fn file_changed(path: &PathBuf, state: &mut State) -> Result<CryptResponse, String> {
+    create_or_update_file(path, state, false)
+}
+
+fn file_deleted(path: &PathBuf, state: &mut State) -> Result<CryptResponse, String> {
+    unimplemented!()
 }
 
 #[cfg(test)]
@@ -604,14 +700,17 @@ mod tests {
             match result {
                 Err(_) => {}
                 Ok(c) => match c {
-                    _ => {}
                     CheckRes::File(h, _) => {
                         if h.get_id() == file_id {
                             found = true;
                         }
                     }
+                    _ => {}
                 }
             }
+        }
+        if !found {
+            panic!("Did not write file!");
         }
         state.get_repository(&repo.get_id()).unwrap().files.get(&file_id).unwrap();
     }
@@ -657,19 +756,32 @@ mod tests {
     fn test_file_added() {
         let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
 
+        let path = {
+            let encrypted_file = state.get_repository(&repo_id).unwrap().get_file(&file_id).unwrap().clone();
+            let p = encrypted_file.get_path().unwrap();
 
-        state.get_repository_mut(repo_id).unwrap().files.clear();
+            state.get_repository_mut(&repo_id).unwrap().files.clear();
+            p
+        };
 
-
+        let result = file_added(&path, &mut state);
+        match result {
+            Ok(CryptResponse::FileCreated(desc)) => {
+                assert_eq!(desc.id, file_id);
+                assert_eq!(desc.repo, repo_id);
+            }
+            Ok(o) => {
+                panic!("Received invalid response {:?}", o);
+            }
+            Err(e) => {
+                panic!("Should have added file to repo but got {:?}", e);
+            }
+        }
     }
 
     #[test]
-    fn test_file_updated() {
-
-    }
+    fn test_file_updated() {}
 
     #[test]
-    fn test_file_deleted() {
-
-    }
+    fn test_file_deleted() {}
 }

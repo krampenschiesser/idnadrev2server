@@ -152,6 +152,9 @@ impl ByteSerialization for RepoHeader {
 
     fn from_bytes(input: &mut Cursor<&[u8]>) -> Result<Self, ParseError> {
         let main_header = MainHeader::from_bytes(input)?;
+        if main_header.file_version != FileVersion::RepositoryV1 {
+            return Err(ParseError::InvalidFileVersion(main_header.file_version));
+        }
         let enc_type = EncryptionType::from_bytes(input)?;
         let pwh_type = PasswordHashType::from_bytes(input)?;
         let length = read_u8(input)?;
@@ -181,6 +184,9 @@ impl ByteSerialization for FileHeader {
 
     fn from_bytes(input: &mut Cursor<&[u8]>) -> Result<Self, ParseError> {
         let main_header = MainHeader::from_bytes(input)?;
+        if main_header.file_version != FileVersion::FileV1 {
+            return Err(ParseError::InvalidFileVersion(main_header.file_version));
+        }
         let repo_id = read_uuid(input)?;
         let enc_type = EncryptionType::from_bytes(input)?;
 

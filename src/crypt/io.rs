@@ -11,6 +11,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 use super::crypt::HashedPw;
 use super::error::*;
+use std::collections::HashMap;
 
 
 pub struct TempFile {
@@ -21,7 +22,7 @@ pub struct TempFile {
 //#[derive(Debug)] not possible due to file watcher
 pub struct ScanResult {
     repositories: Vec<Repository>,
-    files: Vec<(FileHeader, PathBuf)>,
+    files: HashMap<Uuid, (FileHeader, PathBuf)>,
     invalid: Vec<(CryptError, PathBuf)>,
     watcher: RecommendedWatcher,
     file_change_receiver: Receiver<DebouncedEvent>,
@@ -44,7 +45,7 @@ impl CheckRes {
 
 impl ScanResult {
     fn new(watcher: RecommendedWatcher, file_change_receiver: Receiver<DebouncedEvent>) -> Self {
-        ScanResult { repositories: Vec::new(), files: Vec::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver }
+        ScanResult { repositories: Vec::new(), files: HashMap::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver }
     }
 
     pub fn get_repository(&self, id: &Uuid) -> Option<Repository> {
@@ -62,7 +63,28 @@ impl ScanResult {
     }
 
     pub fn get_files_for_repo(&self, repo_id: &Uuid) -> Vec<(FileHeader, PathBuf)> {
-        self.files.iter().filter(|ref t| t.0.get_repository_id() == *repo_id).map(|e| e.clone()).collect()
+        self.files.values().filter(|ref t| t.0.get_repository_id() == *repo_id).map(|e| e.clone()).collect()
+    }
+
+    pub fn update_file(&mut self, header: &FileHeader, path: &PathBuf) {
+        let file_id = header.get_id();
+        let version = header.get_version();
+
+        let should_insert = match self.files.get(&file_id) {
+            None => true,
+            Some(present) => {
+                let old_version = present.0.get_version();
+                if old_version < version {
+                    true
+                } else {
+                    error!("File in scanresult is newer (v={}) than the one added on fs(v={}). Path: {}", old_version, version, path_to_str(path));
+                    false
+                }
+            }
+        };
+        if should_insert {
+            self.files.insert(file_id.clone(), (header.clone(), path.clone()));
+        }
     }
 }
 
@@ -231,7 +253,9 @@ pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
                     s.repositories.push(load.unwrap());
                 }
             }
-            CheckRes::File(h, p) => s.files.push((h, p)),
+            CheckRes::File(h, p) => {
+                s.files.insert(h.get_id(), (h, p));
+            }
             CheckRes::Error(e, p) => s.invalid.push((e, p)),
         };
     }
@@ -293,7 +317,7 @@ pub fn check_map_path(path: &PathBuf) -> Result<CheckRes, ()> {
     Ok(val)
 }
 
-fn read_file_header(path: &PathBuf) -> Result<FileHeader, CryptError> {
+pub fn read_file_header(path: &PathBuf) -> Result<FileHeader, CryptError> {
     let f = File::open(path)?;
     let mut v = Vec::new();
     f.take(1000).read_to_end(&mut v)?;
@@ -303,7 +327,7 @@ fn read_file_header(path: &PathBuf) -> Result<FileHeader, CryptError> {
 }
 
 
-fn read_repo_header(path: &PathBuf) -> Result<RepoHeader, CryptError> {
+pub fn read_repo_header(path: &PathBuf) -> Result<RepoHeader, CryptError> {
     let f = File::open(path)?;
     let mut v = Vec::new();
     f.take(1000).read_to_end(&mut v)?;
@@ -365,7 +389,7 @@ fn check_json_file(path: &PathBuf) -> Result<MainHeader, CryptError> {
     let mut file = file.take(b64_len);
     let mut content = String::new();
     file.read_to_string(&mut content)?;
-    let decode = decode(&content).map_err(|_| CryptError::WrongPrefix)?;
+    let decode = decode(&content).map_err(|_| CryptError::ParseError(ParseError::NoPrefix))?;
     let mut cursor = Cursor::new(decode.as_slice());
     let h = MainHeader::from_bytes(&mut cursor)?;
     Ok(h)
@@ -625,7 +649,9 @@ mod tests {
         encrypted_file.update_header(&key);
 
         let res = scan(&vec![dir.to_path_buf()]).unwrap();
-        let (ref header, ref path) = res.files[0];
+        let tuple = res.files.get(&encrypted_file.get_id()).unwrap();
+        let ref header = tuple.0;
+        let ref path = tuple.1;
         let reloaded = EncryptedFile::load_head(header, &key, path).unwrap();
         assert_eq!(original_version + 1, reloaded.get_version());
         assert_eq!("new header", reloaded.get_header());

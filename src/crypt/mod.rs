@@ -6,6 +6,8 @@ use rand::Rng;
 use std;
 use crypt::serialize::ByteSerialization;
 use crypt::crypt::{DoubleHashedPw, PlainPw};
+use std::fmt::{Formatter, Display};
+use std::fmt;
 
 mod io;
 mod crypt;
@@ -21,6 +23,16 @@ pub enum EncryptionType {
     RingAESGCM,
 }
 
+impl Display for EncryptionType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            EncryptionType::None => write!(f, "None"),
+            EncryptionType::RingChachaPoly1305=> write!(f, "ChachaPoly1305"),
+            EncryptionType::RingAESGCM=> write!(f, "AesGcm"),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum PasswordHashType {
     None,
@@ -32,6 +44,15 @@ pub enum PasswordHashType {
 pub enum FileVersion {
     RepositoryV1,
     FileV1,
+}
+
+impl Display for FileVersion {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            FileVersion::RepositoryV1 => write!(f, "Repository-Version 1"),
+            FileVersion::FileV1 => write!(f, "File-Version 1"),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -226,6 +247,13 @@ impl Repository {
 
     pub fn get_name(&self) -> String {
         self.name.clone()
+    }
+
+    pub fn get_folder(&self) -> Option<PathBuf>{
+        match self.path {
+            Some(ref p) => p.parent().map(|p| p.to_path_buf()),
+            None => None
+        }
     }
 }
 
