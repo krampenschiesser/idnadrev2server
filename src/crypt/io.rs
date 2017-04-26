@@ -14,7 +14,8 @@ use super::error::*;
 
 
 pub struct TempFile {
-    path: PathBuf
+    path: PathBuf,
+    moved: bool,
 }
 
 //#[derive(Debug)] not possible due to file watcher
@@ -73,15 +74,17 @@ impl TempFile {
     }
 
     fn new_in_path(path: PathBuf) -> Self {
-        TempFile { path: path }
+        TempFile { path: path, moved: false }
     }
 }
 
 impl Drop for TempFile {
     fn drop(&mut self) {
-        match remove_file(self.path.clone()) {
-            Err(d) => error!("Could not close temp file {}: {}", path_to_str(&self.path), d),
-            _ => (),
+        if !self.moved {
+            match remove_file(self.path.clone()) {
+                Err(d) => error!("Could not close temp file {}: {}", path_to_str(&self.path), d),
+                _ => (),
+            }
         }
     }
 }
@@ -155,7 +158,7 @@ impl EncryptedFile {
         let mut header_bytes = Vec::new();
         header.to_bytes(&mut header_bytes);
 
-        let temp = TempFile::new();
+        let mut temp = TempFile::new();
         {
             let mut tempfile = File::create(temp.path.clone())?;
             tempfile.write(header_bytes.as_slice())?;
@@ -165,6 +168,7 @@ impl EncryptedFile {
         }
 
         rename(temp.path.clone(), path)?;
+        temp.moved = true;
 
         Ok(())
     }
@@ -180,7 +184,7 @@ impl EncryptedFile {
             return Err(CryptError::OptimisticLockError(header_on_filesystem.get_version()));
         }
 
-        let content = EncryptedFile::load_content(&original_enc_header,key,&path)?;
+        let content = EncryptedFile::load_content(&original_enc_header, key, &path)?;
         let additional = self.encryption_header.get_additional_data();
         let ref mut header = self.encryption_header;
 
@@ -191,7 +195,7 @@ impl EncryptedFile {
         let mut header_bytes = Vec::new();
         header.to_bytes(&mut header_bytes);
 
-        let temp = TempFile::new();
+        let mut temp = TempFile::new();
         {
             let mut tempfile = File::create(temp.path.clone())?;
             tempfile.write(header_bytes.as_slice())?;
@@ -201,7 +205,7 @@ impl EncryptedFile {
         }
 
         rename(temp.path.clone(), path)?;
-
+        temp.moved = true;
         Ok(())
     }
 
@@ -367,7 +371,7 @@ fn check_json_file(path: &PathBuf) -> Result<MainHeader, CryptError> {
     Ok(h)
 }
 
-fn path_to_str(path: &PathBuf) -> String {
+pub fn path_to_str(path: &PathBuf) -> String {
     match path.to_str() {
         Some(str) => String::from(str),
         None => String::from(path.to_string_lossy()),

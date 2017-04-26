@@ -4,17 +4,11 @@
       kind: console
       encoder:
         pattern: "{h({l:5.5})} {d(%Y-%m-%d %H:%M:%S%.3f)} [{T:5}][{M:<15}]- {h({m:<100})} {f}:{L}{n}"
-    file:
-      kind: file
-      path: "log/idnadrev2.log"
-      encoder:
-        pattern: "{h({l:5.5})} {d(%Y-%m-%d %H:%M:%S%.3f)} [{T:5}][{M:<15}]- {h({m:<100})} {f}:{L}{n}"
 
   root:
     level: info
     appenders:
       - stdout
-      - file
   loggers:
     idnadrev2rust:
       level: debug

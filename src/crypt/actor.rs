@@ -3,7 +3,7 @@ use super::{RepoHeader, Repository, EncryptedFile, FileHeader};
 use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use super::io::{ScanResult, scan};
+use super::io::{ScanResult, scan, path_to_str};
 use super::crypt::{PlainPw, HashedPw};
 use super::error::*;
 use std::time::Instant;
@@ -84,14 +84,21 @@ fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
         &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
         &CryptCmd::ListRepositories => list_repositories(state),
         &CryptCmd::CreateNewFile { ref token, ref header, ref content, ref repo } => create_new_file(token, header, content, repo, state),
+        &CryptCmd::FileAdded(ref path) => file_added(path,state),
+        &CryptCmd::FileChanged(ref path) => file_changed(path,state),
+        &CryptCmd::FileDeleted(ref path) => file_deleted(path,state),
         _ => Err("dooo".to_string())
     }
 }
 
 fn invalid_token(msg: &str, token: &Uuid) -> Result<CryptResponse, String> {
+    Ok(invalid_token_response_only(msg, token))
+}
+
+fn invalid_token_response_only(msg: &str, token: &Uuid) -> CryptResponse {
     let ret = format!("No valid access token {}: {}", token, msg);
     warn!("{}", ret);
-    Ok(CryptResponse::InvalidToken(ret))
+    CryptResponse::InvalidToken(ret)
 }
 
 
@@ -159,7 +166,10 @@ impl State {
         let o = self.get_repository_mut(id);
         match o {
             Some(repo) => repo.check_token(token),
-            None => false
+            None => {
+                info!("No repository found for id {}", id);
+                false
+            }
         }
     }
 
@@ -334,7 +344,7 @@ fn list_repositories(state: &mut State) -> Result<CryptResponse, String> {
 
 
 fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
-    if state.check_token(token, repo_id) {
+    let result = if state.check_token(token, repo_id) {
         let repostate = state.get_repository(repo_id).unwrap();
         let ref repo = repostate.repo;
         let fh = FileHeader::new(&repo.header);
@@ -344,17 +354,26 @@ fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &U
         let file_path = repo.get_path().unwrap().join(format!("{}", file_id.simple()));
         file.set_path(&file_path);
         file.save(&repostate.key);
+        info!("Successfully created new file {} in {}", file_id, path_to_str(&file_path));
 
-        Ok(CryptResponse::FileCreated(FileDescriptor::new(&file.encryption_header)))
+        Ok((FileDescriptor::new(&file.encryption_header), file_path))
     } else {
-        invalid_token("Trying to create file with invalid token", token)
+        Err(invalid_token_response_only("Trying to create file with invalid token", token))
+    };
+    match result {
+        Ok((descriptor, path)) => {
+            handle(CryptCmd::FileAdded(path), state);
+            Ok(CryptResponse::FileCreated(descriptor))
+        }
+        Err(response) => Ok(response)
     }
 }
 
 fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &String, state: &mut State) -> Result<CryptResponse, String> {
     let file_id = &file_descriptor.id;
-    let result = if state.check_token(token, file_id) {
-        let mut repostate = state.get_repository_mut(file_id).unwrap();
+    let repo_id = &file_descriptor.repo;
+    let result = if state.check_token(token, repo_id) {
+        let mut repostate = state.get_repository_mut(repo_id).unwrap();
         let mut o = repostate.files.get_mut(file_id);
 
         let cloned_descriptor: FileDescriptor = file_descriptor.clone();
@@ -379,9 +398,7 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
             None => Err(CryptResponse::NoSuchFile(cloned_descriptor))
         }
     } else {
-        let ret = format!("No valid access token {}: {}", token, "Trying to create file with invalid token");
-        warn!("{}", ret);
-        Err(CryptResponse::InvalidToken(ret))
+        Err(invalid_token_response_only("Trying to update file with invalid token", token))
     };
     match result {
         Ok(path) => handle(CryptCmd::FileChanged(path), state),
@@ -596,5 +613,63 @@ mod tests {
                 }
             }
         }
+        state.get_repository(&repo.get_id()).unwrap().files.get(&file_id).unwrap();
+    }
+
+    fn create_repo_and_file<'a>() -> (Uuid, Uuid, &'a [u8], Uuid, State, TempDir) {
+        let (temp, repo, pw) = create_temp_repo();
+        let dir = temp.path().to_path_buf();
+
+        let pw = "password".as_bytes();
+        let id = repo.get_id();
+        let mut state = crypt::actor::State::new(vec![dir.clone()]).unwrap();
+
+        let token = open_repo_get_token(&id, &pw, &mut state);
+
+        let response = create_new_file(&token, &"test header 2".to_string(), &"content2".as_bytes().to_vec(), &id, &mut state).unwrap();
+        let file_id = match response {
+            CryptResponse::FileCreated(d) => {
+                assert_eq!(0, d.version);
+                assert_eq!(&id, &d.repo);
+                d.id
+            }
+            _ => panic!("Got invalid response {:?}", &response)
+        };
+        (token, file_id, pw, id, state, temp)
+    }
+
+    #[test]
+    fn test_update_header() {
+        let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
+
+        let descriptor = FileDescriptor { id: file_id, repo: repo_id, version: 0 };
+        let result = update_file_header(&token, &descriptor, &"bla".to_string(), &mut state).unwrap();
+        match result {
+            CryptResponse::File(desc) => {
+                assert_eq!("bla", desc.header);
+                assert_eq!(1, desc.descriptor.version);
+            }
+            _ => panic!("Did not update file. Result: {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_file_added() {
+        let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
+
+
+        state.get_repository_mut(repo_id).unwrap().files.clear();
+
+
+    }
+
+    #[test]
+    fn test_file_updated() {
+
+    }
+
+    #[test]
+    fn test_file_deleted() {
+
     }
 }
