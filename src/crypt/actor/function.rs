@@ -1,13 +1,42 @@
+use super::communication::{CryptCmd,CryptResponse};
+use super::dto::{FileHeaderDescriptor,FileDescriptor,RepositoryDescriptor};
+use super::state::State;
+use super::super::structs::FileVersion;
+use super::super::structs::crypto::{PlainPw,HashedPw};
+use super::super::structs::repository::{Repository};
+use super::super::structs::file::{EncryptedFile,FileHeader};
+use super::state::scanresult::ScanResult;
+use super::state::repositorystate::RepositoryState;
+use super::super::util::io::{path_to_str,read_file_header,read_repo_header};
+use super::super::error::{CryptError,ParseError};
+
 use uuid::Uuid;
+use log::LogLevel;
+use std::path::PathBuf;
+
+fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
+    match &cmd {
+        &CryptCmd::OpenRepository { ref id, ref pw } => open_repository(id, pw.as_slice(), state),
+        &CryptCmd::CloseRepository { ref id, ref token } => close_repository(id, token, state),
+        &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
+        &CryptCmd::ListRepositories => list_repositories(state),
+        &CryptCmd::CreateNewFile { ref token, ref header, ref content, ref repo } => create_new_file(token, header, content, repo, state),
+        &CryptCmd::FileAdded(ref path) => file_added(path, state),
+        &CryptCmd::FileChanged(ref path) => file_changed(path, state),
+        &CryptCmd::FileDeleted(ref path) => file_deleted(path, state),
+        _ => Err("dooo".to_string())
+    }
+}
+
 
 fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {
     let pw = PlainPw::new(pw);
 
     if state.has_repository(id) {
         let mut existing = state.get_repository_mut(id).unwrap();
-        let hashed = existing.repo.hash_key(pw);
+        let hashed = existing.get_repo().hash_key(pw);
 
-        if hashed == existing.key {
+        if &hashed == existing.get_key() {
             let token = existing.generate_token();
             debug!("Generate new token for already opened repository {}. Token: {}", id, &token);
             Ok(CryptResponse::RepositoryOpened { token: token, id: id.clone() })
@@ -15,12 +44,12 @@ fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptRespo
             Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
         }
     } else {
-        let option = state.scan_result.get_repository(id);
+        let option = state.get_scan_result().get_repository(id);
         match option {
             Some(repo) => {
                 let hashed_key = repo.hash_key(pw);
                 if repo.check_hashed_key(&hashed_key) {
-                    let mut repostate = create_repository_state(hashed_key, repo, &state.scan_result);
+                    let mut repostate = create_repository_state(hashed_key, repo, state.get_scan_result());
                     let token = repostate.generate_token();
                     state.add_repository(&id, repostate);
                     debug!("Opened repository {} with token: {}", id, &token);
@@ -40,12 +69,12 @@ fn create_repository_state(pw: HashedPw, repo: Repository, scan_result: &ScanRes
     let mut repo_state = RepositoryState::new(repo, pw);
 
     for (header, path) in to_load {
-        match EncryptedFile::load_head(&header, &repo_state.key, &path) {
+        match EncryptedFile::load_head(&header, &repo_state.get_key(), &path) {
             Ok(f) => {
-                repo_state.files.insert(f.get_id(), f);
+                repo_state.add_file(f);
             }
             Err(e) => {
-                repo_state.error_files.push((path, format!("{}", e)));
+                repo_state.add_error((path, format!("{}", e)));
             }
         }
     }
@@ -64,7 +93,7 @@ fn close_repository(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptR
 fn list_files(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, id) {
         let repo = state.get_repository(id).unwrap();//unwrap because check_token returns false on no repo
-        let files: Vec<FileHeaderDescriptor> = repo.files.values().map(|f| FileHeaderDescriptor::new(f)).collect();
+        let files: Vec<FileHeaderDescriptor> = repo.get_all_files().map(|f| FileHeaderDescriptor::new(f)).collect();
 
         Ok(CryptResponse::Files(files))
     } else {
@@ -82,17 +111,17 @@ fn list_repositories(state: &mut State) -> Result<CryptResponse, String> {
 fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
     let result = if state.check_token(token, repo_id) {
         let repostate = state.get_repository(repo_id).unwrap();
-        let ref repo = repostate.repo;
-        let fh = FileHeader::new(&repo.header);
+        let ref repo = repostate.get_repo();
+        let fh = FileHeader::new(&repo.get_header());
         let file_id = fh.get_id();
         let mut file = EncryptedFile::new(fh, header);
         file.set_content(content);
         let file_path = repo.get_folder().unwrap().join(format!("{}", file_id.simple()));
         file.set_path(&file_path);
-        file.save(&repostate.key);
+        file.save(repostate.get_key());
         info!("Successfully created new file {} in {}", file_id, path_to_str(&file_path));
 
-        Ok((FileDescriptor::new(&file.encryption_header), file_path))
+        Ok((FileDescriptor::new(&file.get_encryption_header()), file_path))
     } else {
         Err(invalid_token_response_only("Trying to create file with invalid token", token))
     };
@@ -110,16 +139,16 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
     let repo_id = &file_descriptor.repo;
     let result = if state.check_token(token, repo_id) {
         let mut repostate = state.get_repository_mut(repo_id).unwrap();
-        let mut o = repostate.files.get_mut(file_id);
+        let mut o = repostate.get_file_mut(file_id);
 
         let cloned_descriptor: FileDescriptor = file_descriptor.clone();
         match o {
             Some(file) => {
-                let current_version = file.encryption_header.get_version();
+                let current_version = file.get_encryption_header().get_version();
                 if current_version <= file_descriptor.version {
                     let mut cloned = file.clone();
                     cloned.set_header(header);
-                    match cloned.update_header(&repostate.key) {
+                    match cloned.update_header(repostate.get_key()) {
                         Ok(_) => Ok(file.get_path().unwrap()),
                         Err(e) => {
                             let error = format!("Could not update header of {} : {:?}", cloned.get_id(), e);
@@ -196,4 +225,14 @@ fn file_changed(path: &PathBuf, state: &mut State) -> Result<CryptResponse, Stri
 
 fn file_deleted(path: &PathBuf, state: &mut State) -> Result<CryptResponse, String> {
     unimplemented!()
+}
+
+fn invalid_token(msg: &str, token: &Uuid) -> Result<CryptResponse, String> {
+    Ok(invalid_token_response_only(msg, token))
+}
+
+fn invalid_token_response_only(msg: &str, token: &Uuid) -> CryptResponse {
+    let ret = format!("No valid access token {}: {}", token, msg);
+    warn!("{}", ret);
+    CryptResponse::InvalidToken(ret)
 }

@@ -1,20 +1,23 @@
 use std::path::PathBuf;
+use std::fs::remove_file;
 use uuid::Uuid;
 use std::ops::Drop;
+use std;
+use super::io::path_to_str;
 
 pub struct TempFile {
-    path: PathBuf,
-    moved: bool,
+    pub path: PathBuf,
+    pub moved: bool,
 }
 
 impl TempFile {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let tempdir = std::env::temp_dir();
         let name = format!("{}", Uuid::new_v4().simple());
         TempFile::new_in_path(tempdir.join(name))
     }
 
-    fn new_in_path(path: PathBuf) -> Self {
+    pub fn new_in_path(path: PathBuf) -> Self {
         TempFile { path: path, moved: false }
     }
 }

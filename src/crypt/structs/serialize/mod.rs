@@ -2,10 +2,13 @@ use std::io::{Cursor, Read, Write};
 use uuid::Uuid;
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use super::*;
-use super::crypt::DoubleHashedPw;
-use super::error::*;
+use super::super::structs::crypto::DoubleHashedPw;
+use super::super::structs::repository::{Repository,RepoHeader};
+use super::super::structs::file::{FileHeader,EncryptedFile};
+use super::super::error::*;
 
 const UUID_LENGTH: usize = 16;
+
 
 pub trait ByteSerialization: Sized {
     fn to_bytes(&self, vec: &mut Vec<u8>);

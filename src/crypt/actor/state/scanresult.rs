@@ -1,3 +1,14 @@
+use super::super::super::structs::repository::{Repository, RepoHeader};
+use super::super::super::structs::file::{FileHeader, EncryptedFile};
+use super::super::super::error::CryptError;
+use super::super::super::util::io::path_to_str;
+use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher};
+use std::sync::mpsc::{channel, Receiver};
+use std::path::PathBuf;
+use uuid::Uuid;
+use std::collections::HashMap;
+
+
 pub struct ScanResult {
     repositories: Vec<Repository>,
     files: HashMap<Uuid, (FileHeader, PathBuf)>,
@@ -5,6 +16,7 @@ pub struct ScanResult {
     watcher: RecommendedWatcher,
     file_change_receiver: Receiver<DebouncedEvent>,
 }
+
 #[derive(Debug)]
 pub enum CheckRes {
     Repo(RepoHeader, PathBuf),
@@ -21,7 +33,7 @@ impl CheckRes {
 }
 
 impl ScanResult {
-    fn new(watcher: RecommendedWatcher, file_change_receiver: Receiver<DebouncedEvent>) -> Self {
+    pub fn new(watcher: RecommendedWatcher, file_change_receiver: Receiver<DebouncedEvent>) -> Self {
         ScanResult { repositories: Vec::new(), files: HashMap::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver }
     }
 

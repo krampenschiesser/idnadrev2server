@@ -1,10 +1,16 @@
-use super::{EncryptionType, MainHeader};
+use super::super::structs::repository::{RepoHeader, Repository};
+use super::{EncryptionType, MainHeader, FileVersion};
 use super::crypto::HashedPw;
+use super::super::util::{decrypt, encrypt};
 use super::super::error::CryptError;
 use super::super::util::tempfile::TempFile;
+use super::super::util::random_vec;
+use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
 use std::path::PathBuf;
+use std::fs::{rename, File};
 use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
+use super::serialize::ByteSerialization;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct FileHeader {
@@ -55,6 +61,15 @@ impl FileHeader {
 
     pub fn get_version(&self) -> u32 {
         self.main_header.version
+    }
+
+    pub fn get_encryption_type(&self) -> &EncryptionType {
+        &self.encryption_type
+    }
+
+
+    pub fn get_main_header(&self) -> &MainHeader {
+        &self.main_header
     }
 }
 
@@ -108,7 +123,7 @@ impl EncryptedFile {
         let mut buff = vec![0u8; header.header_length as usize];
         c.read_exact(buff.as_mut_slice())?;
 
-        let plaintext = crypt::decrypt(&header.encryption_type, &header.nonce_header, key, buff.as_slice(), additional.as_slice())?;
+        let plaintext = decrypt(&header.encryption_type, &header.nonce_header, key, buff.as_slice(), additional.as_slice())?;
 
         let plaintext = String::from_utf8(plaintext)?;
 
@@ -128,7 +143,7 @@ impl EncryptedFile {
         let mut buff = Vec::new();
         c.read_to_end(&mut buff)?;
 
-        let plaintext = crypt::decrypt(&header.encryption_type, &header.nonce_content, key, buff.as_slice(), additional.as_slice())?;
+        let plaintext = decrypt(&header.encryption_type, &header.nonce_content, key, buff.as_slice(), additional.as_slice())?;
         Ok(plaintext)
     }
 
@@ -143,9 +158,9 @@ impl EncryptedFile {
 
         let ref mut header = self.encryption_header;
 
-        let encryptedheadertext = crypt::encrypt(&header.encryption_type, header.nonce_header.as_slice(), key, self.header.as_bytes(), additional.as_slice())?;
+        let encryptedheadertext = encrypt(&header.encryption_type, header.nonce_header.as_slice(), key, self.header.as_bytes(), additional.as_slice())?;
         header.set_header_length(encryptedheadertext.len() as u32);
-        let encryptedcontent = crypt::encrypt(&header.encryption_type, header.nonce_content.as_slice(), key, content, additional.as_slice())?;
+        let encryptedcontent = encrypt(&header.encryption_type, header.nonce_content.as_slice(), key, content, additional.as_slice())?;
 
         let mut header_bytes = Vec::new();
         header.to_bytes(&mut header_bytes);
@@ -180,9 +195,9 @@ impl EncryptedFile {
         let additional = self.encryption_header.get_additional_data();
         let ref mut header = self.encryption_header;
 
-        let encryptedheadertext = crypt::encrypt(&header.encryption_type, header.nonce_header.as_slice(), key, self.header.as_bytes(), additional.as_slice())?;
+        let encryptedheadertext = encrypt(&header.encryption_type, header.nonce_header.as_slice(), key, self.header.as_bytes(), additional.as_slice())?;
         header.set_header_length(encryptedheadertext.len() as u32);
-        let encryptedcontent = crypt::encrypt(&header.encryption_type, header.nonce_content.as_slice(), key, content.as_slice(), additional.as_slice())?;
+        let encryptedcontent = encrypt(&header.encryption_type, header.nonce_content.as_slice(), key, content.as_slice(), additional.as_slice())?;
 
         let mut header_bytes = Vec::new();
         header.to_bytes(&mut header_bytes);
@@ -203,5 +218,8 @@ impl EncryptedFile {
 
     pub fn get_header(&self) -> &String {
         &self.header
+    }
+    pub fn get_encryption_header(&self) -> &FileHeader {
+        &self.encryption_header
     }
 }

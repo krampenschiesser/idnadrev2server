@@ -2,6 +2,7 @@ use super::structs::EncryptionType;
 use super::structs::crypto::HashedPw;
 use super::error::RingError;
 use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey, Algorithm};
+use rand::{OsRng,Rng};
 
 pub mod io;
 pub mod tempfile;

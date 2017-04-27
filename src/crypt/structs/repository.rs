@@ -1,7 +1,10 @@
-use super::{EncryptionType, PasswordHashType, MainHeader};
+use super::{EncryptionType, PasswordHashType, MainHeader, FileVersion};
 use super::crypto::{HashedPw, DoubleHashedPw, PlainPw};
 use super::super::error::CryptError;
+use super::super::util::random_vec;
+use super::serialize::ByteSerialization;
 use std::path::PathBuf;
+use std::fs::File;
 use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
 
@@ -37,6 +40,9 @@ impl RepoHeader {
         RepoHeader { main_header: mh, encryption_type: enc_type, password_hash_type: kdf, salt: salt }
     }
 
+    pub fn get_encryption_type(&self) -> &EncryptionType {
+        &self.encryption_type
+    }
     pub fn get_id(&self) -> Uuid {
         self.main_header.id.clone()
     }
@@ -64,6 +70,10 @@ impl Repository {
             Some(ref p) => p.parent().map(|p| p.to_path_buf()),
             None => None
         }
+    }
+
+    pub fn get_header(&self) -> &RepoHeader {
+        &self.header
     }
 
     pub fn hash_key(&self, pw_plain: PlainPw) -> HashedPw {

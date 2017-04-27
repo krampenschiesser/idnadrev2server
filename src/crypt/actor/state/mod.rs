@@ -1,40 +1,51 @@
+use super::super::structs::repository::{Repository, RepoHeader};
+use super::super::structs::file::{FileHeader, EncryptedFile};
+use super::super::error::CryptError;
+use super::super::util::io::scan;
+use self::repositorystate::RepositoryState;
+use self::scanresult::{ScanResult, CheckRes};
+
+use std::collections::{HashMap, HashSet};
+use uuid::Uuid;
+use std::path::PathBuf;
 
 pub mod repositorystate;
 pub mod scanresult;
 
 
-struct State {
+pub struct State {
     nonces: HashSet<Vec<u8>>,
     repositories: HashMap<Uuid, RepositoryState>,
 
     folders: Vec<PathBuf>,
     scan_result: ScanResult,
 }
+
 impl State {
-    fn new(folders: Vec<PathBuf>) -> Result<Self, CryptError> {
+    pub fn new(folders: Vec<PathBuf>) -> Result<Self, CryptError> {
         let result = scan(&folders)?;
         Ok(State { nonces: HashSet::new(), repositories: HashMap::new(), folders: Vec::new(), scan_result: result })
     }
-    fn get_repositories(&self) -> &Vec<Repository> {
+    pub fn get_repositories(&self) -> &Vec<Repository> {
         self.scan_result.get_repositories()
     }
-    fn get_repository(&self, id: &Uuid) -> Option<&RepositoryState> {
+    pub fn get_repository(&self, id: &Uuid) -> Option<&RepositoryState> {
         self.repositories.get(id)
     }
 
-    fn get_repository_mut(&mut self, id: &Uuid) -> Option<&mut RepositoryState> {
+    pub fn get_repository_mut(&mut self, id: &Uuid) -> Option<&mut RepositoryState> {
         self.repositories.get_mut(id)
     }
 
-    fn has_repository(&self, id: &Uuid) -> bool {
+    pub fn has_repository(&self, id: &Uuid) -> bool {
         self.repositories.contains_key(id)
     }
 
-    fn add_repository(&mut self, id: &Uuid, repostate: RepositoryState) {
+    pub fn add_repository(&mut self, id: &Uuid, repostate: RepositoryState) {
         self.repositories.insert(id.clone(), repostate);
     }
 
-    fn check_token(&mut self, token: &Uuid, id: &Uuid) -> bool {
+    pub fn check_token(&mut self, token: &Uuid, id: &Uuid) -> bool {
         let o = self.get_repository_mut(id);
         match o {
             Some(repo) => repo.check_token(token),
@@ -45,7 +56,7 @@ impl State {
         }
     }
 
-    fn generate_token(&mut self, id: &Uuid) -> Option<Uuid> {
+    pub fn generate_token(&mut self, id: &Uuid) -> Option<Uuid> {
         let mut o = self.repositories.get_mut(id);
         match o {
             None => None,
@@ -53,7 +64,7 @@ impl State {
         }
     }
 
-    fn remove_token(&mut self, id: &Uuid, token: &Uuid) {
+    pub fn remove_token(&mut self, id: &Uuid, token: &Uuid) {
         let no_tokens = match self.repositories.get_mut(id) {
             None => false,
             Some(ref mut r) => {
@@ -62,20 +73,20 @@ impl State {
             }
         };
         if no_tokens {
-            info!("All tokens removed, now closing repository {} with id {}", self.get_repository(id).unwrap().repo.name, id);
+            info!("All tokens removed, now closing repository {} with id {}", self.get_repository(id).unwrap().get_repo().get_name(), id);
             self.repositories.remove(id);
         }
     }
 
-    fn update_file(&mut self, file_header: FileHeader, path: PathBuf) -> Result<(), String> {
+    pub fn update_file(&mut self, file_header: FileHeader, path: PathBuf) -> Result<(), String> {
         let file_id = file_header.get_id();
         let added = self.scan_result.update_file(&file_header, &path);
         let repo_id = file_header.get_repository_id();
 
         match self.repositories.get_mut(&repo_id) {
             Some(ref mut repo) => {
-                let repo_enc_type = repo.repo.header.encryption_type.clone();
-                let file_enc_type = file_header.encryption_type.clone();
+                let repo_enc_type = repo.get_repo().get_header().get_encryption_type().clone();
+                let file_enc_type = file_header.get_encryption_type().clone();
                 if repo_enc_type != file_enc_type {
                     Err(format!("Cannot add file with different encryption type. Repository: {}, file: {}", repo_enc_type, file_enc_type))
                 } else {
@@ -87,5 +98,9 @@ impl State {
                 Err(format!("Found no repository for {}", repo_id))
             }
         }
+    }
+
+    pub fn get_scan_result(&self) -> &ScanResult {
+        &self.scan_result
     }
 }

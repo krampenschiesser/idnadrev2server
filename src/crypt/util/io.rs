@@ -1,13 +1,17 @@
-use super::super::error::CryptError;
+use super::super::error::{CryptError,ParseError};
 use super::super::structs::repository::{RepoHeader, Repository};
 use super::super::structs::file::{FileHeader};
 use super::super::structs::{MainHeader, FileVersion};
 use super::super::actor::state::scanresult::{ScanResult, CheckRes};
+use super::super::structs::serialize::ByteSerialization;
 use std::path::PathBuf;
+use std::fs::{File,DirEntry};
 use std::time::Duration;
 use std::io::{Read, Write, Cursor};
 use std::io;
 use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher};
+use std::sync::mpsc::{channel, Receiver};
+use base64::{decode,encode};
 
 pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
     let (tx, rx) = channel();

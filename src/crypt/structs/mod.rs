@@ -1,10 +1,12 @@
 use std::fmt::{Display,Formatter};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
 use ring::constant_time::verify_slices_are_equal;
-use ring::aead::{AES_128_GCM,CHACHA20_POLY1305};
+use ring::aead::{AES_256_GCM,CHACHA20_POLY1305,Algorithm};
 use std::time::{Instant};
 use chrono::Duration;
 use uuid::Uuid;
+use std::fmt;
+use rand::{OsRng,Rng};
 
 pub mod crypto;
 pub mod file;

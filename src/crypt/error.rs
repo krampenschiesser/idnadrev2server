@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 use std::error::Error;
 use notify;
-use super::FileVersion;
+use super::structs::FileVersion;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CryptError {
