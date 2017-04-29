@@ -25,6 +25,7 @@ pub struct Repository {
     hash: DoubleHashedPw,
     name: String,
     path: Option<PathBuf>,
+    //fixme refactor to pw container with user management
 }
 
 impl RepoHeader {
