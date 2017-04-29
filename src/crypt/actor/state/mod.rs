@@ -45,7 +45,12 @@ impl State {
         self.repositories.contains_key(id)
     }
 
-    pub fn add_repository(&mut self, id: &Uuid, repostate: RepositoryState) {
+    pub fn has_repository_with_name(&self, name: &str) -> bool {
+        self.repositories.values().any(|r|r.get_name() == name) ||
+            self.scan_result.has_repository_with_name(name)
+    }
+
+    pub fn add_repository_state(&mut self, id: &Uuid, repostate: RepositoryState) {
         self.repositories.insert(id.clone(), repostate);
     }
 
@@ -107,6 +112,9 @@ impl State {
     pub fn get_scan_result(&self) -> &ScanResult {
         &self.scan_result
     }
+    pub fn get_scan_result_mut(&mut self) -> &mut ScanResult {
+        &mut self.scan_result
+    }
 
     pub fn remove_file(&mut self, repo_id: &Uuid, file_id: &Uuid) {
         let mut o = self.repositories.get_mut(repo_id);
@@ -120,4 +128,5 @@ impl State {
         };
         self.scan_result.remove_file(file_id);
     }
+
 }

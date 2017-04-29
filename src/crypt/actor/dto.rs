@@ -5,6 +5,24 @@ use std::time::Instant;
 use uuid::Uuid;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub enum EncTypeDto {
+    AES,
+    ChaCha
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum PwKdfDto {
+    SCrypt { iterations: u8, memory_costs: u32, parallelism: u32 },
+    //Argon,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RepositoryDto {
+    pub id: Uuid,
+    pub token: Uuid,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AccessToken {
     #[cfg(test)]
     pub last_access: Instant,

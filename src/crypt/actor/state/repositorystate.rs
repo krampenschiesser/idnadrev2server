@@ -101,12 +101,17 @@ impl RepositoryState {
     pub fn get_files(&self) -> &HashMap<Uuid, EncryptedFile> {
         &self.files
     }
+
     pub fn get_files_mut(&mut self) -> &mut HashMap<Uuid, EncryptedFile> {
         &mut self.files
     }
 
     pub fn remove_file(&mut self, id: &Uuid) {
         self.files.remove(id);
+    }
+
+    pub fn get_name(&self) -> String {
+        self.repo.get_name()
     }
     #[cfg(test)]
     pub fn set_token_time(&mut self, token: &Uuid, time: Instant) {

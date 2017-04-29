@@ -22,8 +22,6 @@ extern crate log;
 extern crate log4rs;
 #[cfg(test)]
 extern crate spectral;
-#[macro_use]
-extern crate lazy_static;
 
 
 mod crypt;
@@ -79,6 +77,9 @@ fn tryservice() {
     info!("Before joining");
     t.join();
 }
+
+use std::time::Instant;
+use ring_pwhash::scrypt::{ScryptParams,scrypt};
 
 fn main() {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();

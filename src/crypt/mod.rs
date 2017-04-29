@@ -6,7 +6,7 @@ mod error;
 use self::actor::state::State;
 use self::error::CryptError;
 use self::actor::communication::*;
-use self::actor::function::handle;
+use self::actor::handle;
 use actor::{ActorControl, Actor};
 use self::actor::dto::*;
 
@@ -31,19 +31,6 @@ impl CryptoActor {
 }
 
 impl CryptoActor {
-    //CreateNewFile { token: Uuid, header: String, content: Vec<u8>, repo: Uuid },
-    //UpdateHeader { token: Uuid, header: String, file: FileDescriptor },
-    //UpdateFile { token: Uuid, header: String, content: Vec<u8>, file: FileDescriptor },
-    //DeleteFile { token: Uuid, file: FileDescriptor },
-    //
-    //CloseRepository { token: Uuid, id: Uuid },
-    //
-    //FileAdded(PathBuf),
-    //FileChanged(PathBuf),
-    //FileDeleted(PathBuf),
-    //
-    //    Shutdown,
-
     fn send_unwrap(&self, cmd: CryptCmd) -> Option<CryptResponse> {
         let response = self.actor_control.send_sync(cmd.clone());
         match response {
@@ -88,6 +75,28 @@ impl CryptoActor {
             None
         }
     }
+
+    pub fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncTypeDto) -> Option<RepositoryDto> {
+        #[cfg(debug_assertions)]
+        let scrypt = PwKdfDto::SCrypt { iterations: 4, memory_costs: 4, parallelism:1 };
+        #[cfg(not(debug_assertions))]
+        let scrypt = PwKdfDto::SCrypt { iterations: 16, memory_costs: 8, parallelism: 1 };
+
+        let cmd = CryptCmd::CreateRepository { name: name.to_string(), pw: pw, folder_id: None, encryption: EncTypeDto::ChaCha, kdf: scrypt };
+
+        if let Some(response) = self.send_unwrap(cmd) {
+            match response {
+                CryptResponse::RepositoryCreated { token, id } => Some(RepositoryDto { token: token, id: id }),
+                o => {
+                    error!("Got wrong response while creating repository {}: {}", name, o);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+
     pub fn close_repository(&self, id: &Uuid, token: &Uuid) -> Option<Uuid> {
         let cmd = CryptCmd::CloseRepository { id: id.clone(), token: token.clone() };
 
@@ -222,11 +231,11 @@ impl CryptoActor {
 mod tests {
     use super::*;
     use self::super::actor::function::tests::create_temp_repo;
-    use log4rs;
+    use tempdir::TempDir;
+    use std::time::Instant;
 
     #[test]
     fn test_full_process() {
-        log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
         let (temp, repo, pw) = create_temp_repo();
         let repo_id = repo.get_id();
 
@@ -264,6 +273,19 @@ mod tests {
         let files = actor.list_repository_files(&repo_id, &token).unwrap();
         assert_eq!(1, files.len());
 
+        actor.close_repository(&repo_id, &token).unwrap();
+    }
+
+    #[test]
+    fn test_create_repo_add_file() {
+        let temp = TempDir::new("temp_repo").unwrap();
+
+        let actor = CryptoActor::new(vec![temp.path().to_path_buf()]).unwrap();
+        let repository = actor.create_repository("another repository", "bla".as_bytes().to_vec(), EncTypeDto::AES).unwrap();
+        let repo_id = repository.id;
+        let token = repository.token;
+
+        let new_file = actor.create_new_file(&repo_id, &token, "Hallo Header".to_string(), vec![4, 2]).unwrap();
         actor.close_repository(&repo_id, &token).unwrap();
     }
 }

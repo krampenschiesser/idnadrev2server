@@ -1,4 +1,4 @@
-use super::dto::{FileDescriptor, FileHeaderDescriptor, RepositoryDescriptor};
+use super::dto::*;
 use super::super::util::io::path_to_str;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -15,6 +15,7 @@ pub enum CryptCmd {
     GetFileHeader { token: Uuid, file: FileDescriptor },
     GetFile { token: Uuid, file: FileDescriptor },
 
+    CreateRepository { name: String, pw: Vec<u8>, encryption: EncTypeDto, kdf: PwKdfDto, folder_id: Option<u16> },
     OpenRepository { id: Uuid, pw: Vec<u8> },
     CloseRepository { token: Uuid, id: Uuid },
     ListRepositories,
@@ -32,6 +33,7 @@ pub enum CryptResponse {
     FileCreated(FileDescriptor),
     FileChanged(FileDescriptor),
     FileDeleted(FileDescriptor),
+    RepositoryChanged(Uuid),
 
     File(FileHeaderDescriptor),
     FileContent(FileHeaderDescriptor, Vec<u8>),
@@ -40,9 +42,11 @@ pub enum CryptResponse {
     Repositories(Vec<RepositoryDescriptor>),
 
     RepositoryOpened { token: Uuid, id: Uuid },
+    RepositoryCreated { token: Uuid, id: Uuid },
     RepositoryOpenFailed { id: Uuid },
     RepositoryIsClosed { id: Uuid },
     NoSuchRepository { id: Uuid },
+    RepositoryAlreadyExists{ name: String},
 
     OptimisticLockError { file: FileDescriptor, file_version: u32 },
     NoSuchFile(FileDescriptor),
@@ -57,6 +61,7 @@ pub enum CryptResponse {
 impl Display for CryptCmd {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
+            CryptCmd::CreateRepository { ref name, .. } => write!(f, "Creating repository {}", name),
             CryptCmd::OpenRepository { ref id, .. } => write!(f, "Open repository {}", id),
             CryptCmd::CloseRepository { ref id, .. } => write!(f, "Close repository {}", id),
             CryptCmd::ListFiles { ref id, .. } => write!(f, "List files in {}", id),
@@ -91,10 +96,14 @@ impl Display for CryptResponse {
 
             CryptResponse::Repositories(ref repos) => write!(f, "CryptResponse::Repositories: Listing of {} repos", repos.len()),
 
+            CryptResponse::RepositoryCreated { ref id, .. } => write!(f, "CryptResponse::RepositoryCreated: created repository {}", id),
             CryptResponse::RepositoryOpened { ref id, .. } => write!(f, "CryptResponse::RepositoryOpened: Opened repository {}", id),
             CryptResponse::RepositoryOpenFailed { ref id } => write!(f, "CryptResponse::RepositoryOpenFailed: Failed to open repository {}", id),
             CryptResponse::RepositoryIsClosed { ref id } => write!(f, "CryptResponse::RepositoryIsClosed: Repository is closed {}", id),
+            CryptResponse::RepositoryAlreadyExists { ref name } => write!(f, "CryptResponse::RepositoryAlreadyExists: A repository with name {} already exists.", name),
             CryptResponse::NoSuchRepository { ref id } => write!(f, "CryptResponse::NoSuchRepository: Repositroy does not exist {}", id),
+            CryptResponse::RepositoryChanged(ref id) => write!(f, "CryptResponse::RepositoryChanged: Repository {} changed.", id),
+
 
             CryptResponse::OptimisticLockError { ref file, ref file_version } => write!(f, "CryptResponse::OptimisticLockError: File was modified, new_version={} file_version={}, file={}", file_version, &file.version, &file.id),
             CryptResponse::NoSuchFile(ref file) => write!(f, "CryptResponse::NoSuchFile: No file exists {}", file.id),

@@ -21,7 +21,7 @@ pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
     }
     let check_results: Vec<CheckRes> = folders.into_iter().flat_map(|p| scan_folder(&p)).collect();
 
-    let mut s = ScanResult::new(watcher, rx);
+    let mut s = ScanResult::new(watcher, rx,folders);
     for i in check_results {
         match i {
             CheckRes::Repo(_, p) => {

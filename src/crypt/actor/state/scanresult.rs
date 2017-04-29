@@ -15,6 +15,7 @@ pub struct ScanResult {
     invalid: Vec<(CryptError, PathBuf)>,
     watcher: RecommendedWatcher,
     file_change_receiver: Receiver<DebouncedEvent>,
+    folders: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -33,8 +34,8 @@ impl CheckRes {
 }
 
 impl ScanResult {
-    pub fn new(watcher: RecommendedWatcher, file_change_receiver: Receiver<DebouncedEvent>) -> Self {
-        ScanResult { repositories: Vec::new(), files: HashMap::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver }
+    pub fn new(watcher: RecommendedWatcher, file_change_receiver: Receiver<DebouncedEvent>, folders: &Vec<PathBuf>) -> Self {
+        ScanResult { repositories: Vec::new(), files: HashMap::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver, folders: folders.clone() }
     }
 
     pub fn get_repository(&self, id: &Uuid) -> Option<Repository> {
@@ -102,5 +103,13 @@ impl ScanResult {
 
     pub fn remove_file(&mut self, id: &Uuid) {
         self.files.remove(id);
+    }
+
+    pub fn has_repository_with_name(&self, name: &str) -> bool {
+        self.repositories.iter().any(|r| r.get_name() == name)
+    }
+
+    pub fn get_folders(&self) -> &Vec<PathBuf> {
+        &self.folders
     }
 }

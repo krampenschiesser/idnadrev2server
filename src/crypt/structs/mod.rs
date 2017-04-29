@@ -1,16 +1,17 @@
-use std::fmt::{Display,Formatter};
+use std::fmt::{Display, Formatter};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
 use ring::constant_time::verify_slices_are_equal;
-use ring::aead::{AES_256_GCM,CHACHA20_POLY1305,Algorithm};
+use ring::aead::{AES_256_GCM, CHACHA20_POLY1305, Algorithm};
 use std::time::{Instant};
 use chrono::Duration;
 use uuid::Uuid;
 use std::fmt;
-use rand::{OsRng,Rng};
+use rand::{OsRng, Rng};
 use byteorder::{WriteBytesExt, LittleEndian};
 use self::serialize::*;
 use std::io::{Read, Write, Cursor};
 use super::error::{ParseError};
+use super::actor::dto::{EncTypeDto, PwKdfDto};
 
 
 pub mod crypto;
@@ -47,16 +48,16 @@ pub struct MainHeader {
 }
 
 
-
 impl Display for EncryptionType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
             EncryptionType::None => write!(f, "None"),
-            EncryptionType::RingChachaPoly1305=> write!(f, "ChachaPoly1305"),
-            EncryptionType::RingAESGCM=> write!(f, "AesGcm"),
+            EncryptionType::RingChachaPoly1305 => write!(f, "ChachaPoly1305"),
+            EncryptionType::RingAESGCM => write!(f, "AesGcm"),
         }
     }
 }
+
 impl Display for FileVersion {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
@@ -75,19 +76,28 @@ impl PasswordHashType {
             PasswordHashType::None => 0,
         }
     }
-    pub fn hash(&self, input: &[u8], len: usize) -> Vec<u8> {
+    pub fn hash(&self, input: &[u8],/*salt:&[u8],*/ len: usize) -> Vec<u8> {
         match *self {
             PasswordHashType::None => input.to_vec(),
             PasswordHashType::SCrypt { iterations, memory_costs, parallelism } => {
                 let mut buff = vec![0u8; len];
                 let param = ScryptParams::new(iterations, memory_costs, parallelism);
                 let now = Instant::now();
-                scrypt(input, input, &param, buff.as_mut_slice());
+                scrypt(input, input, &param, buff.as_mut_slice());//fixme use salt!!wtf!
+//                scrypt(input, salt, &param, buff.as_mut_slice());
 
                 debug!("Scrypt took {}s", Duration::from_std(now.elapsed()).unwrap().num_milliseconds());
                 buff
             }
             _ => unimplemented!()
+        }
+    }
+}
+
+impl<'a> From<&'a PwKdfDto> for PasswordHashType {
+    fn from(dto: &PwKdfDto) -> Self {
+        match dto {
+            &PwKdfDto::SCrypt { iterations, memory_costs, parallelism } => PasswordHashType::SCrypt { iterations: iterations, memory_costs: memory_costs, parallelism: parallelism },
         }
     }
 }
@@ -125,6 +135,16 @@ impl EncryptionType {
     }
 }
 
+impl<'a> From<&'a EncTypeDto> for EncryptionType {
+    fn from(dto: &EncTypeDto) -> Self {
+        match dto {
+            &EncTypeDto::AES => EncryptionType::RingAESGCM,
+            &EncTypeDto::ChaCha => EncryptionType::RingChachaPoly1305,
+        }
+    }
+}
+
+
 impl MainHeader {
     pub fn new(file_version: FileVersion) -> Self {
         let id = Uuid::new_v4();
@@ -143,7 +163,6 @@ fn random_vec(len: usize) -> Vec<u8> {
     rng.fill_bytes(salt.as_mut_slice());
     salt
 }
-
 
 
 impl ByteSerialization for FileVersion {
@@ -273,6 +292,8 @@ impl ByteSerialization for MainHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
+    use super::crypto::*;
 
     #[test]
     fn enc_type() {
@@ -357,3 +378,4 @@ mod tests {
         assert_eq!(pwh, pwh2);
     }
 }
+

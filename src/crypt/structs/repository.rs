@@ -1,14 +1,15 @@
 use super::{EncryptionType, PasswordHashType, MainHeader, FileVersion};
 use super::crypto::{HashedPw, DoubleHashedPw, PlainPw};
-use super::super::error::{CryptError,ParseError};
+use super::super::error::{CryptError, ParseError};
 use super::super::util::random_vec;
+use super::super::util::tempfile::TempFile;
+use super::super::util::io::path_to_str;
 use std::path::PathBuf;
-use std::fs::File;
+use std::fs::{rename,File};
 use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
 use byteorder::{WriteBytesExt, LittleEndian};
 use super::serialize::*;
-
 
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -48,6 +49,12 @@ impl RepoHeader {
     }
     pub fn get_id(&self) -> Uuid {
         self.main_header.id.clone()
+    }
+
+    pub fn get_additional_data(&self) -> Vec<u8> {
+        let mut v = Vec::new();
+        self.main_header.to_bytes(&mut v);
+        v
     }
 }
 
@@ -110,6 +117,10 @@ impl Repository {
     pub fn get_path(&self) -> Option<PathBuf> {
         self.path.clone()
     }
+
+    pub fn set_path(&mut self, path: &PathBuf) {
+        self.path = Some(path.clone())
+    }
     pub fn load(path: PathBuf) -> Result<Self, CryptError> {
         let mut f = File::open(path.clone())?;
         let mut v = Vec::new();
@@ -119,6 +130,26 @@ impl Repository {
         let mut repo = Repository::from_bytes(&mut c)?;
         repo.path = Some(path);
         Ok(repo)
+    }
+
+    pub fn save(&self) -> Result<(), CryptError> {
+        let path = self.path.as_ref().ok_or(CryptError::NoFilePath)?;
+        if path.exists() {
+            return Err(CryptError::IOError(format!("Repository {} already exists", path_to_str(path))));
+        }
+        let mut buff = Vec::new();
+        self.to_bytes(&mut buff);
+
+        let mut temp = TempFile::new();
+        {
+            let mut tempfile = File::create(temp.path.clone())?;
+            tempfile.write(buff.as_slice())?;
+            tempfile.sync_all()?;
+        }
+        rename(temp.path.clone(), path)?;
+        temp.moved = true;
+
+        Ok(())
     }
 }
 
