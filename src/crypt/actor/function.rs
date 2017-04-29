@@ -167,7 +167,18 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
         Err(invalid_token_response_only("Trying to update file with invalid token", token))
     };
     match result {
-        Ok(path) => handle(CryptCmd::FileChanged(path), state),
+        Ok(path) => {
+            let res = handle(CryptCmd::FileChanged(path), state);
+            match res {
+                Ok(CryptResponse::FileChanged(descriptor)) => {
+                    let header = state.get_repository(&descriptor.repo).unwrap().get_file(&descriptor.id).unwrap().get_header().to_string();
+                    let descriptor = FileHeaderDescriptor { header: header, descriptor: descriptor };
+                    Ok(CryptResponse::File(descriptor))
+                }
+                Ok(other) => Ok(other),
+                Err(r) => Err(r)
+            }
+        }
         Err(response) => Ok(response)
     }
 }
@@ -195,9 +206,9 @@ fn create_or_update_file(path: &PathBuf, state: &mut State, create: bool) -> Res
             if create {
                 Ok(CryptResponse::FileCreated(descriptor))
             } else {
-                let header = state.get_repository(&repo_id).unwrap().get_file(&id).unwrap().get_header().to_string();
-                let descriptor = FileHeaderDescriptor { header: header, descriptor: descriptor };
-                Ok(CryptResponse::File(descriptor))
+                //                let header = state.get_repository(&repo_id).unwrap().get_file(&id).unwrap().get_header().to_string();
+                //                let descriptor = FileHeaderDescriptor { header: header, descriptor: descriptor };
+                Ok(CryptResponse::FileChanged(descriptor))
             }
         }
         Err(CryptError::ParseError(ParseError::NoPrefix)) => {
@@ -225,7 +236,8 @@ fn file_changed(path: &PathBuf, state: &mut State) -> Result<CryptResponse, Stri
 }
 
 fn file_deleted(path: &PathBuf, state: &mut State) -> Result<CryptResponse, String> {
-    unimplemented!()
+
+    Ok(CryptResponse::AccessDenied)
 }
 
 fn invalid_token(msg: &str, token: &Uuid) -> Result<CryptResponse, String> {
@@ -247,7 +259,7 @@ mod tests {
     use super::super::super::structs::crypto::{PlainPw, HashedPw};
     use super::super::super::structs::serialize::ByteSerialization;
     use tempdir::TempDir;
-    use std::fs::File;
+    use std::fs::{File, remove_file};
     use std::io::Write;
     use spectral::prelude::*;
     use std::time::{Instant, Duration};
@@ -518,8 +530,64 @@ mod tests {
     }
 
     #[test]
-    fn test_file_updated() {}
+    fn test_file_changed() {
+        let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
+
+        let path = {
+            let key = state.get_repository(&repo_id).unwrap().get_key().clone();
+            let mut encrypted_file: EncryptedFile = state.get_repository_mut(&repo_id).unwrap().get_file_mut(&file_id).unwrap().clone();
+            encrypted_file.set_header("HUHU");
+            encrypted_file.update_header(&key);
+
+            let p = encrypted_file.get_path().unwrap();
+            p
+        };
+
+        let result = file_changed(&path, &mut state);
+        match result {
+            Ok(CryptResponse::FileChanged(desc)) => {
+                assert_eq!(desc.id, file_id);
+                assert_eq!(desc.repo, repo_id);
+            }
+            Ok(o) => {
+                panic!("Received invalid response {:?}", o);
+            }
+            Err(e) => {
+                panic!("Should have added file to repo but got {:?}", e);
+            }
+        }
+
+        let file = state.get_repository_mut(&repo_id).unwrap().get_file_mut(&file_id).unwrap().clone();
+        assert_eq!("HUHU", file.get_header().as_str());
+    }
 
     #[test]
-    fn test_file_deleted() {}
+    fn test_file_deleted() {
+        let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
+        let path = {
+            let encrypted_file: EncryptedFile = state.get_repository_mut(&repo_id).unwrap().get_file_mut(&file_id).unwrap().clone();
+            let p = encrypted_file.get_path().unwrap();
+            p
+        };
+        remove_file(&path);
+
+        let result = file_deleted(&path, &mut state);
+        match result {
+            Ok(CryptResponse::FileDeleted(desc)) => {
+                assert_eq!(desc.id, file_id);
+                assert_eq!(desc.repo, repo_id);
+            }
+            Ok(o) => {
+                panic!("Received invalid response {:?}", o);
+            }
+            Err(e) => {
+                panic!("Should have added file to repo but got {:?}", e);
+            }
+        }
+
+        assert!(!state.get_repository_mut(&repo_id).unwrap().get_files().contains_key(&file_id));
+        assert!(!state.get_scan_result().has_file(&file_id));
+    }
+
+    //fixme add tests for repo added/updated/deleted
 }

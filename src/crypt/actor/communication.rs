@@ -22,6 +22,7 @@ pub enum CryptCmd {
 #[derive(Debug, PartialEq, Eq)]
 pub enum CryptResponse {
     FileCreated(FileDescriptor),
+    FileChanged(FileDescriptor),
     FileDeleted(FileDescriptor),
 
     File(FileHeaderDescriptor),

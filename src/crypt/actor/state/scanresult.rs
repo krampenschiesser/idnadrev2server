@@ -62,6 +62,10 @@ impl ScanResult {
         self.files.insert(h.get_id(), (h, p));
     }
 
+    pub fn has_file(&self, id: &Uuid) -> bool {
+        self.files.contains_key(id)
+    }
+
     pub fn add_invalid(&mut self, e: CryptError, p: PathBuf) {
         self.invalid.push((e, p));
     }

@@ -18,7 +18,7 @@ pub struct State {
     repositories: HashMap<Uuid, RepositoryState>,
 
     folders: Vec<PathBuf>,
-    scan_result: ScanResult,
+    scan_result: ScanResult,//fixme get rid of this maybe? double data...
 }
 
 impl State {
