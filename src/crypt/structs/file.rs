@@ -2,7 +2,7 @@ use super::super::structs::repository::{RepoHeader, Repository};
 use super::{EncryptionType, MainHeader, FileVersion};
 use super::crypto::HashedPw;
 use super::super::util::{decrypt, encrypt};
-use super::super::error::CryptError;
+use super::super::error::{CryptError,ParseError};
 use super::super::util::tempfile::TempFile;
 use super::super::util::random_vec;
 use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use std::fs::{rename, File};
 use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
-use super::serialize::ByteSerialization;
+use byteorder::{WriteBytesExt, LittleEndian};
+use super::serialize::*;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct FileHeader {
@@ -221,5 +222,159 @@ impl EncryptedFile {
     }
     pub fn get_encryption_header(&self) -> &FileHeader {
         &self.encryption_header
+    }
+}
+
+
+impl ByteSerialization for FileHeader {
+    fn to_bytes(&self, vec: &mut Vec<u8>) {
+        self.main_header.to_bytes(vec);
+        vec.extend_from_slice(self.repository_id.as_bytes());
+        self.encryption_type.to_bytes(vec);
+
+        let nonce_header_len = self.nonce_header.len() as u8;
+        let nonce_content_len = self.nonce_content.len() as u8;
+        vec.write_u8(nonce_header_len);
+        vec.write_u8(nonce_content_len);
+        vec.write_u32::<LittleEndian>(self.header_length);
+        vec.append(&mut self.nonce_header.clone());
+        vec.append(&mut self.nonce_content.clone());
+    }
+
+    fn from_bytes(input: &mut Cursor<&[u8]>) -> Result<Self, ParseError> {
+        let main_header = MainHeader::from_bytes(input)?;
+        if main_header.file_version != FileVersion::FileV1 {
+            return Err(ParseError::InvalidFileVersion(main_header.file_version));
+        }
+        let repo_id = read_uuid(input)?;
+        let enc_type = EncryptionType::from_bytes(input)?;
+
+        let nonce_header_len = read_u8(input)?;
+        let nonce_content_len = read_u8(input)?;
+        let header_len = read_u32(input)?;
+
+        let mut nonce_header = vec![0u8; nonce_header_len as usize];
+        read_buff(input, nonce_header.as_mut_slice())?;
+
+        let mut nonce_content = vec![0u8; nonce_content_len as usize];
+        read_buff(input, nonce_content.as_mut_slice())?;
+
+        Ok(FileHeader { main_header: main_header, repository_id: repo_id, encryption_type: enc_type, header_length: header_len, nonce_header: nonce_header, nonce_content: nonce_content })
+    }
+    fn byte_len(&self) -> usize {
+        self.main_header.byte_len() + UUID_LENGTH + self.encryption_type.byte_len() + 2 + 4 + self.nonce_header.len() + self.nonce_content.len()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempdir::TempDir;
+    use super::super::crypto::PlainPw;
+    use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+    use std::path::Path;
+    use std::ffi::OsString;
+    use std::fs::remove_file;
+    use spectral::prelude::*;
+    use super::super::super::util::io::{scan};
+
+    #[test]
+    fn encrypted_file() {
+        let tempdir = TempDir::new("scanfolder").unwrap();
+        let dir = tempdir.path();
+
+        let repo_header = RepoHeader::new_for_test();
+        let repo = Repository::new("test", PlainPw::new("password".as_bytes()), repo_header);
+        let key = repo.hash_key(PlainPw::new("password".as_bytes()));
+
+        let mut encrypted_file = EncryptedFile::with_content(FileHeader::new(&repo.get_header()), "header", "content".as_bytes());
+        {
+            encrypted_file.set_path(&dir.join("myfile"));
+            encrypted_file.save(&key).unwrap();
+        }
+        let ref header = encrypted_file.encryption_header;
+        let path = encrypted_file.path.as_ref().unwrap();
+        let reloaded = EncryptedFile::load_head(header, &key, path).unwrap();
+        let content = EncryptedFile::load_content(header, &key, path).unwrap();
+        let contenttext = String::from_utf8(content).unwrap();
+        assert_eq!("content", contenttext);
+        assert_eq!("header", reloaded.header);
+    }
+
+    fn unwrap_filename(p: &Path) -> OsString {
+        p.to_path_buf().file_name().unwrap().to_os_string()
+    }
+
+    fn create_temp_file() -> (EncryptedFile, HashedPw, PathBuf, TempDir) {
+        let tempdir = TempDir::new("scanfolder").unwrap();
+        let dir = tempdir.path().to_path_buf();
+
+        let repo_header = RepoHeader::new_for_test();
+        let repo = Repository::new("test", PlainPw::new("password".as_bytes()), repo_header);
+        let key = repo.hash_key(PlainPw::new("password".as_bytes()));
+
+        let mut encrypted_file = EncryptedFile::with_content(FileHeader::new(&repo.get_header()), "header", "content".as_bytes());
+        {
+            encrypted_file.set_path(&dir.join("myfile"));
+            encrypted_file.save(&key).unwrap();
+        }
+        (encrypted_file, key, dir, tempdir)
+    }
+
+    #[test]
+    fn update_header() {
+        let (mut encrypted_file, key, dir, temp) = create_temp_file();
+        let original_version = encrypted_file.get_version();
+        encrypted_file.set_header("new header");
+        encrypted_file.update_header(&key);
+
+        let res = scan(&vec![dir.to_path_buf()]).unwrap();
+        let tuple = res.get_files().get(&encrypted_file.get_id()).unwrap();
+        let ref header = tuple.0;
+        let ref path = tuple.1;
+        let reloaded = EncryptedFile::load_head(header, &key, path).unwrap();
+        assert_eq!(original_version + 1, reloaded.get_version());
+        assert_eq!("new header", reloaded.get_header());
+    }
+
+    #[test]
+    fn double_file_save() {
+        let (mut encrypted_file, key, dir, temp) = create_temp_file();
+        let res = encrypted_file.save(&key);
+        match res {
+            Ok(_) => panic!("Should have failed and not written file"),
+            Err(CryptError::IOError(msg)) => assert_that(&msg).contains("already exists"),
+            _ => panic!("Unknown error occured {:?}", res),
+        }
+    }
+
+    #[test]
+    fn update_header_nofile() {
+        let (mut encrypted_file, key, dir, mut temp) = create_temp_file();
+
+        //        remove_file(encrypted_file.get_path().unwrap()).unwrap();
+        temp.close().unwrap();
+
+        let res = encrypted_file.update_header(&key);
+        match res {
+            Err(CryptError::FileDoesNotExist(s)) => assert_that(&s).contains("myfile"),
+            _ => panic!("Invalid result: {:?}", res),
+        }
+    }
+
+    #[test]
+    fn update_header_optimisticlockerror() {
+        let (mut encrypted_file, key, dir, temp) = create_temp_file();
+        let mut clone = encrypted_file.clone();
+        clone.update_header(&key);
+
+        let res = encrypted_file.update_header(&key);
+        match res {
+            Err(CryptError::OptimisticLockError(v)) => assert_eq!(1, v),
+            _ => panic!("Invalid result: {:?}", res),
+        }
     }
 }

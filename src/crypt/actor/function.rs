@@ -93,7 +93,7 @@ fn close_repository(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptR
 fn list_files(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, id) {
         let repo = state.get_repository(id).unwrap();//unwrap because check_token returns false on no repo
-        let files: Vec<FileHeaderDescriptor> = repo.get_all_files().map(|f| FileHeaderDescriptor::new(f)).collect();
+        let files: Vec<FileHeaderDescriptor> = repo.get_file_headers();
 
         Ok(CryptResponse::Files(files))
     } else {
@@ -139,6 +139,7 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
     let repo_id = &file_descriptor.repo;
     let result = if state.check_token(token, repo_id) {
         let mut repostate = state.get_repository_mut(repo_id).unwrap();
+        let key = repostate.get_key().clone();
         let mut o = repostate.get_file_mut(file_id);
 
         let cloned_descriptor: FileDescriptor = file_descriptor.clone();
@@ -148,7 +149,7 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
                 if current_version <= file_descriptor.version {
                     let mut cloned = file.clone();
                     cloned.set_header(header);
-                    match cloned.update_header(repostate.get_key()) {
+                    match cloned.update_header(&key) {
                         Ok(_) => Ok(file.get_path().unwrap()),
                         Err(e) => {
                             let error = format!("Could not update header of {} : {:?}", cloned.get_id(), e);

@@ -27,13 +27,13 @@ pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
             CheckRes::Repo(_, p) => {
                 let load = Repository::load(p);
                 if load.is_ok() {
-                    s.repositories.push(load.unwrap());
+                    s.add_repo(load.unwrap());
                 }
             }
             CheckRes::File(h, p) => {
-                s.files.insert(h.get_id(), (h, p));
+                s.add_file(h,p);
             }
-            CheckRes::Error(e, p) => s.invalid.push((e, p)),
+            CheckRes::Error(e, p) => s.add_invalid(e,p),
         };
     }
     Ok(s)
@@ -72,14 +72,14 @@ pub fn check_map_path(path: &PathBuf) -> Result<CheckRes, ()> {
 
     let val = match result {
         Ok(header) => {
-            match header.file_version {
-                FileVersion::FileV1 => {
+            match header.get_file_version() {
+                &FileVersion::FileV1 => {
                     match read_file_header(&path) {
                         Err(e) => CheckRes::Error(e, path.clone()),
                         Ok(f) => CheckRes::File(f, path.clone()),
                     }
                 }
-                FileVersion::RepositoryV1 => {
+                &FileVersion::RepositoryV1 => {
                     match read_repo_header(&path) {
                         Err(e) => CheckRes::Error(e, path.clone()),
                         Ok(r) => CheckRes::Repo(r, path.clone()),
@@ -176,5 +176,209 @@ pub fn path_to_str(path: &PathBuf) -> String {
     match path.to_str() {
         Some(str) => String::from(str),
         None => String::from(path.to_string_lossy()),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempdir::TempDir;
+    use super::super::super::structs::crypto::PlainPw;
+    use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+    use std::path::Path;
+    use std::ffi::OsString;
+    use std::fs::remove_file;
+    use spectral::prelude::*;
+    use super::super::super::structs::repository::{RepoHeader,Repository};
+
+    #[test]
+    fn file_existance() {
+        let dir = TempDir::new("file_existance").unwrap().into_path();
+        let err = check_file_exists("4711", &dir);
+        assert_eq!(Err(CryptError::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
+
+        let err = check_plain_files_exist("4711", &dir);
+        assert_eq!(Err(CryptError::FileDoesNotExist(path_to_str(&dir.join("4711.json")))), err);
+        {
+            File::create(&dir.join("4711.json")).unwrap();
+        }
+        let err = check_plain_files_exist("4711", &dir);
+        assert_eq!(Err(CryptError::FileDoesNotExist(path_to_str(&dir.join("4711")))), err);
+    }
+
+    #[test]
+    fn no_file_exists() {
+        let dir = TempDir::new("file_not_existance").unwrap().into_path();
+        {
+            File::create(&dir.join("4711")).unwrap();
+        }
+
+        let err = check_file_not_exists("4711", &dir);
+        assert_eq!(Err(CryptError::FileAlreadyExists(path_to_str(&dir.join("4711")))), err);
+
+
+        let err = check_plain_files_not_exist("4711", &dir);
+        assert_eq!(Err(CryptError::FileAlreadyExists(path_to_str(&dir.join("4711")))), err);
+        {
+            File::create(&dir.join("4711.json")).unwrap();
+        }
+        let err = check_plain_files_not_exist("4711", &dir);
+        assert_eq!(Err(CryptError::FileAlreadyExists(path_to_str(&dir.join("4711.json")))), err);
+    }
+
+    #[test]
+    fn bin_header_correct() {
+        let header = MainHeader::new(FileVersion::FileV1);
+        let dir = TempDir::new("header").unwrap().into_path();
+        {
+            let mut f = File::create(&dir.join("4711")).unwrap();
+            let mut c = Vec::new();
+            header.to_bytes(&mut c);
+            f.write_all(c.as_slice()).unwrap();
+        }
+        let res = check_file_prefix("4711", &dir, false);
+        assert_eq!(Ok(header), res);
+    }
+
+    #[test]
+    fn bin_header_wrong() {
+        let header = MainHeader::new(FileVersion::FileV1);
+        let dir = TempDir::new("header").unwrap().into_path();
+        {
+            let mut f = File::create(&dir.join("4711")).unwrap();
+            let mut c = Vec::new();
+            header.to_bytes(&mut c);
+            c[0] = 0xAA;
+            f.write_all(c.as_slice()).unwrap();
+        }
+        let res = check_file_prefix("4711", &dir, false);
+        assert_eq!(Err(CryptError::ParseError(ParseError::NoPrefix)), res);
+    }
+
+    #[test]
+    fn plain_header_correct() {
+        let header = MainHeader::new(FileVersion::FileV1);
+        let dir = TempDir::new("header").unwrap().into_path();
+        {
+            let mut f = File::create(&dir.join("4711.json")).unwrap();
+            let mut c = Vec::new();
+            header.to_bytes(&mut c);
+            let b64 = encode(c.as_slice());
+            f.write_all(b64.as_bytes()).unwrap();
+        }
+        let res = check_file_prefix("4711", &dir, true);
+        assert_eq!(Ok(header), res);
+    }
+
+    #[test]
+    fn plain_header_wrong() {
+        let header = MainHeader::new(FileVersion::FileV1);
+        let dir = TempDir::new("header").unwrap().into_path();
+        {
+            let mut f = File::create(&dir.join("4711.json")).unwrap();
+            let mut c = Vec::new();
+            header.to_bytes(&mut c);
+            let b64 = encode(c.as_slice()).replace("vq", "ee");
+            f.write_all(b64.as_bytes()).unwrap();
+        }
+        let res = check_file_prefix("4711", &dir, true);
+        assert_eq!(Err(CryptError::ParseError(ParseError::NoPrefix)), res);
+    }
+
+    #[test]
+    fn scan_folder() {
+        let dir = TempDir::new("scanfolder").unwrap().into_path();
+        {
+            let mut repofile = File::create(&dir.join("repository")).unwrap();
+            let mut file1 = File::create(&dir.join("file1")).unwrap();
+            let mut file2 = File::create(&dir.join("file2")).unwrap();
+            let mut file3 = File::create(&dir.join("errorfile")).unwrap();
+
+            let repo_header = RepoHeader::new_for_test();
+            let mut v = Vec::new();
+            repo_header.to_bytes(&mut v);
+            repofile.write_all(v.as_slice()).unwrap();
+
+            let mut v = Vec::new();
+            FileHeader::new(&repo_header).to_bytes(&mut v);
+            file1.write_all(v.as_slice()).unwrap();
+
+            let mut v = Vec::new();
+            FileHeader::new(&repo_header).to_bytes(&mut v);
+            file2.write_all(v.as_slice()).unwrap();
+
+            file3.write_all("hello world".as_bytes()).unwrap();
+        }
+        let result: Vec<CheckRes> = super::scan_folder(&dir);
+        assert_eq!(4, result.len());
+
+        let repo = result.iter().find(|r| match **r {
+            CheckRes::Repo(_, _) => true,
+            _ => false
+        }).unwrap();
+        assert_eq!(dir.join("repository"), repo.get_path());
+
+
+        let files: Vec<_> = result.iter().filter(|r| match **r {
+            CheckRes::File(_, _) => true,
+            _ => false
+        }).collect();
+        assert_eq!(2, files.len());
+
+
+        let error = result.iter().find(|r| match **r {
+            CheckRes::Error(_, _) => true,
+            _ => false
+        }).unwrap();
+        assert_eq!(dir.join("errorfile"), error.get_path());
+    }
+
+
+    #[test]
+    fn file_watcher() {
+        let tempdir = TempDir::new("filewatcher").unwrap();
+
+        let (tx, rx) = channel();
+
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_millis(10)).unwrap();
+        watcher.watch(tempdir.path(), RecursiveMode::NonRecursive);
+
+        let path = tempdir.path().join("testfile");
+        {
+            File::create(path.clone()).unwrap();
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+            match change {
+                DebouncedEvent::Create(p) => {
+                    info!("Got {:?}", p);
+                }
+                _ => panic!("received invalid notification {:?}", &change)
+            }
+        }
+        let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+        match change {
+            DebouncedEvent::Create(ref p) => {
+                assert_eq!(unwrap_filename(&path), unwrap_filename(p), "not the expected creation path. expected {:?} but got {:?}", unwrap_filename(&path), unwrap_filename(p));
+            }
+            _ => panic!("received invalid notification {:?}", &change)
+        }
+        remove_file(path.clone()).unwrap();
+
+        let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+        match change {
+            DebouncedEvent::NoticeRemove(ref p) => {
+                assert_eq!(unwrap_filename(&path), unwrap_filename(p), "not the expected deletion path. expected {:?} but got {:?}", unwrap_filename(&path), unwrap_filename(p));
+            }
+            _ => panic!("received invalid notification {:?}", &change)
+        }
+    }
+
+    fn unwrap_filename(p: &Path) -> OsString {
+        p.to_path_buf().file_name().unwrap().to_os_string()
     }
 }

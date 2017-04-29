@@ -25,7 +25,7 @@ pub enum CheckRes {
 }
 
 impl CheckRes {
-    fn get_path(&self) -> PathBuf {
+    pub fn get_path(&self) -> PathBuf {
         match *self {
             CheckRes::Repo(_, ref p) | CheckRes::File(_, ref p) | CheckRes::Error(_, ref p) => p.clone()
         }
@@ -50,9 +50,24 @@ impl ScanResult {
     pub fn get_repositories(&self) -> &Vec<Repository> {
         &self.repositories
     }
+    pub fn get_files(&self) -> &HashMap<Uuid, (FileHeader, PathBuf)> {
+        &self.files
+    }
 
     pub fn get_files_for_repo(&self, repo_id: &Uuid) -> Vec<(FileHeader, PathBuf)> {
         self.files.values().filter(|ref t| t.0.get_repository_id() == *repo_id).map(|e| e.clone()).collect()
+    }
+
+    pub fn add_file(&mut self, h: FileHeader, p: PathBuf) {
+        self.files.insert(h.get_id(), (h, p));
+    }
+
+    pub fn add_invalid(&mut self, e: CryptError, p: PathBuf) {
+        self.invalid.push((e, p));
+    }
+
+    pub fn add_repo(&mut self, repo: Repository) {
+        self.repositories.push(repo)
     }
 
     pub fn update_file(&mut self, header: &FileHeader, path: &PathBuf) {

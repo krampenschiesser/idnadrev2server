@@ -1,5 +1,6 @@
 use std::collections::{HashMap};
 use std::collections::hash_map::Values;
+use super::super::dto::FileHeaderDescriptor;
 use super::super::super::structs::file::{EncryptedFile, FileHeader};
 use super::super::super::structs::repository::{Repository, RepoHeader};
 use super::super::dto::AccessToken;
@@ -93,9 +94,10 @@ impl RepositoryState {
         self.error_files.push(tuple);
     }
 
-    pub fn get_all_files(&self) -> &Values<Uuid, EncryptedFile> {
-        &self.files.values()
+    pub fn get_file_headers(&self) -> Vec<FileHeaderDescriptor> {
+        self.files.values().map(|f| FileHeaderDescriptor::new(f)).collect()
     }
+
     #[cfg(test)]
     pub fn set_token_time(&mut self, token: &Uuid, time: Instant) {
         let mut t = self.tokens.get_mut(token).unwrap();

@@ -1,12 +1,14 @@
 use super::{EncryptionType, PasswordHashType, MainHeader, FileVersion};
 use super::crypto::{HashedPw, DoubleHashedPw, PlainPw};
-use super::super::error::CryptError;
+use super::super::error::{CryptError,ParseError};
 use super::super::util::random_vec;
-use super::serialize::ByteSerialization;
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
+use byteorder::{WriteBytesExt, LittleEndian};
+use super::serialize::*;
+
 
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -116,5 +118,59 @@ impl Repository {
         let mut repo = Repository::from_bytes(&mut c)?;
         repo.path = Some(path);
         Ok(repo)
+    }
+}
+
+
+impl ByteSerialization for RepoHeader {
+    fn to_bytes(&self, vec: &mut Vec<u8>) {
+        self.main_header.to_bytes(vec);
+        self.encryption_type.to_bytes(vec);
+        self.password_hash_type.to_bytes(vec);
+
+        let salt_len = self.salt.len() as u8;
+        vec.push(salt_len);
+        vec.append(&mut self.salt.clone());
+    }
+
+    fn from_bytes(input: &mut Cursor<&[u8]>) -> Result<Self, ParseError> {
+        let main_header = MainHeader::from_bytes(input)?;
+        if main_header.file_version != FileVersion::RepositoryV1 {
+            return Err(ParseError::InvalidFileVersion(main_header.file_version));
+        }
+        let enc_type = EncryptionType::from_bytes(input)?;
+        let pwh_type = PasswordHashType::from_bytes(input)?;
+        let length = read_u8(input)?;
+        let mut buff = vec![0u8; length as usize];
+        read_buff(input, &mut buff.as_mut_slice())?;
+        Ok(RepoHeader { salt: buff, encryption_type: enc_type, main_header: main_header, password_hash_type: pwh_type })
+    }
+    fn byte_len(&self) -> usize {
+        self.main_header.byte_len() + self.encryption_type.byte_len() + self.password_hash_type.byte_len() + 1 + self.salt.len()
+    }
+}
+
+impl ByteSerialization for Repository {
+    fn to_bytes(&self, vec: &mut Vec<u8>) {
+        self.header.to_bytes(vec);
+        let hash_len = self.hash.len() as u8;
+        vec.write_u8(hash_len);
+        vec.write(self.hash.as_slice());
+        vec.write(self.name.as_bytes());
+    }
+
+    fn from_bytes(input: &mut Cursor<&[u8]>) -> Result<Self, ParseError> {
+        let h = RepoHeader::from_bytes(input)?;
+        let hash_len = read_u8(input)?;
+        let mut buff = vec![0u8; hash_len as usize];
+        read_buff(input, &mut buff)?;
+        let mut namebuff = Vec::new();
+        input.read_to_end(&mut namebuff)?;
+        let name = String::from_utf8(namebuff)?;
+        Ok(Repository { header: h, hash: DoubleHashedPw::from_bytes(buff), name: name, path: None })
+    }
+
+    fn byte_len(&self) -> usize {
+        unimplemented!()
     }
 }
