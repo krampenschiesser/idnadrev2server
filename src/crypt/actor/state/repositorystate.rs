@@ -11,7 +11,6 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 
-
 pub struct RepositoryState {
     files: HashMap<Uuid, EncryptedFile>,
     error_files: Vec<(PathBuf, String)>,
@@ -98,6 +97,12 @@ impl RepositoryState {
         self.files.values().map(|f| FileHeaderDescriptor::new(f)).collect()
     }
 
+    pub fn get_files(&self) -> &HashMap<Uuid, EncryptedFile> {
+        &self.files
+    }
+    pub fn get_files_mut(&mut self) -> &mut HashMap<Uuid, EncryptedFile> {
+        &mut self.files
+    }
     #[cfg(test)]
     pub fn set_token_time(&mut self, token: &Uuid, time: Instant) {
         let mut t = self.tokens.get_mut(token).unwrap();

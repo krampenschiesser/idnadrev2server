@@ -26,8 +26,11 @@ impl State {
         let result = scan(&folders)?;
         Ok(State { nonces: HashSet::new(), repositories: HashMap::new(), folders: Vec::new(), scan_result: result })
     }
-    pub fn get_repositories(&self) -> &Vec<Repository> {
+    pub fn get_scanned_repositories(&self) -> &Vec<Repository> {
         self.scan_result.get_repositories()
+    }
+    pub fn get_repositories(&self) -> &HashMap<Uuid, RepositoryState> {
+        &self.repositories
     }
     pub fn get_repository(&self, id: &Uuid) -> Option<&RepositoryState> {
         self.repositories.get(id)

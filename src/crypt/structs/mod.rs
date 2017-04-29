@@ -269,3 +269,91 @@ impl ByteSerialization for MainHeader {
         2 + 1 + UUID_LENGTH + 4
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enc_type() {
+        let mut vec: Vec<u8> = Vec::new();
+        EncryptionType::RingAESGCM.to_bytes(&mut vec);
+        assert_eq! (1, vec.len());
+        assert_eq!(2, vec[0]);
+
+        assert_eq! (EncryptionType::None, EncryptionType::from_bytes(&mut Cursor::new(&[0])).unwrap());
+        assert_eq!(EncryptionType::RingChachaPoly1305, EncryptionType::from_bytes(&mut Cursor::new(&[1])).unwrap());
+        assert_eq! (EncryptionType::RingAESGCM, EncryptionType::from_bytes(&mut Cursor::new(&[2])).unwrap());
+
+        assert_eq! (Some(ParseError::WrongValue(0, 42)), EncryptionType::from_bytes(&mut Cursor::new(&[42])).err());
+    }
+
+    #[test]
+    fn enc_type_and_pw_type() {
+        let mut vec: Vec<u8> = Vec::new();
+        EncryptionType::RingAESGCM.to_bytes(&mut vec);
+        PasswordHashType::None.to_bytes(&mut vec);
+        assert_eq! (2, vec.len());
+        assert_eq! (2, vec[0]);
+        assert_eq! (0, vec[1]);
+    }
+
+    #[test]
+    fn main_header() {
+        let id = Uuid::nil();
+        let header = MainHeader { file_version: FileVersion::RepositoryV1, id: id.clone(), version: 8 };
+        let mut result = Vec::new();
+        header.to_bytes(&mut result);
+
+        let mut expected = Vec::new();
+        expected.push(0xBE);
+        expected.push(0xAF);
+        expected.push(0x01);
+        for i in 0..16 {
+            expected.push(0u8);
+        }
+        expected.push(0x08);
+        expected.push(0x00);
+        expected.push(0x00);
+        expected.push(0x00);
+
+        assert_eq!(expected.len(), result.len());
+        assert_eq! (expected, result);
+
+        let mut c = Cursor::new(result.as_slice());
+        let reparsed = MainHeader::from_bytes(&mut c).unwrap();
+        assert_eq!(header, reparsed);
+    }
+
+    #[test]
+    fn main_header_wrong_prefix() {
+        let mut v = Vec::new();
+        v.push(0xBE);
+        v.push(0xAA);
+
+        let error = MainHeader::from_bytes(&mut Cursor::new(v.as_slice()));
+        assert_eq!(Err(ParseError::NoPrefix), error);
+    }
+
+    #[test]
+    fn main_header_too_short() {
+        let mut v = Vec::new();
+        v.push(0xBE);
+        v.push(0xAF);
+        v.push(0x00);
+
+        let error = MainHeader::from_bytes(&mut Cursor::new(v.as_slice()));
+        assert_eq!(Err(ParseError::IllegalPos(3)), error);
+    }
+
+    #[test]
+    fn pw_hash_type() {
+        let pwh = PasswordHashType::SCrypt { iterations: 1, parallelism: 3, memory_costs: 2 };
+        let mut result = Vec::new();
+        pwh.to_bytes(&mut result);
+
+        assert_eq!(10, result.len());
+        let pwh2 = PasswordHashType::from_bytes(&mut Cursor::new(result.as_slice())).unwrap();
+        assert_eq!(pwh, pwh2);
+    }
+}

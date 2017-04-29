@@ -377,4 +377,27 @@ mod tests {
             _ => panic!("Invalid result: {:?}", res),
         }
     }
+
+    #[test]
+    fn serialize_file_header() {
+        let rh = RepoHeader::new_for_test();
+        let h = FileHeader::new(&rh);
+
+        let mut result = Vec::new();
+        h.to_bytes(&mut result);
+
+        let main_header_len = 2 + 1 + UUID_LENGTH + 4;
+        let repo_id = UUID_LENGTH;
+        let enc_type_len = 1;
+        let nonce1_len = 1;
+        let nonce2_len = 1;
+        let sizeof_header = 4;
+        let expected_len = main_header_len + repo_id + enc_type_len + nonce1_len + nonce2_len + sizeof_header + 2 * 12;
+
+        assert_eq!(expected_len, h.byte_len());
+        assert_eq!(expected_len, result.len());
+
+        let parse_back = FileHeader::from_bytes(&mut Cursor::new(result.as_slice())).unwrap();
+        assert_eq!(h, parse_back);
+    }
 }

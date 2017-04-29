@@ -174,3 +174,38 @@ impl ByteSerialization for Repository {
         unimplemented!()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize_repo_header() {
+        let kdf = PasswordHashType::SCrypt { iterations: 1, memory_costs: 2, parallelism: 3 };
+        let h = RepoHeader::new(kdf, EncryptionType::RingChachaPoly1305);
+
+        let mut result = Vec::new();
+        h.to_bytes(&mut result);
+
+        let main_header_len = 2 + 1 + UUID_LENGTH + 4;
+        assert_eq!(main_header_len, h.main_header.byte_len());
+
+        let enc_type_len = 1;
+        assert_eq!(enc_type_len, h.encryption_type.byte_len());
+
+        let kdf_len = 1 + 1 + 2 * 4;
+        assert_eq!(kdf_len, h.password_hash_type.byte_len());
+
+        let salt_len_field = 1;
+        let salt_len = 32;
+        assert_eq!(salt_len, h.salt.len());
+
+
+        let expected_len = main_header_len + (enc_type_len) + (kdf_len) + (salt_len_field) + salt_len;
+        assert_eq!(expected_len, h.byte_len());
+        assert_eq!(expected_len, result.len());
+
+        let parse_back = RepoHeader::from_bytes(&mut Cursor::new(result.as_slice())).unwrap();
+        assert_eq!(h, parse_back);
+    }
+}
