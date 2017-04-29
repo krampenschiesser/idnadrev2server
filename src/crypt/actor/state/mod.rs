@@ -4,6 +4,7 @@ use super::super::error::CryptError;
 use super::super::util::io::scan;
 use self::repositorystate::RepositoryState;
 use self::scanresult::{ScanResult, CheckRes};
+use super::dto::AccessToken;
 
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -54,7 +55,7 @@ impl State {
         self.repositories.insert(id.clone(), repostate);
     }
 
-    pub fn check_token(&mut self, token: &Uuid, id: &Uuid) -> bool {
+    pub fn check_token(&mut self, token: &AccessToken, id: &Uuid) -> bool {
         let o = self.get_repository_mut(id);
         match o {
             Some(repo) => repo.check_token(token),
@@ -65,15 +66,15 @@ impl State {
         }
     }
 
-    pub fn generate_token(&mut self, id: &Uuid) -> Option<Uuid> {
-        let mut o = self.repositories.get_mut(id);
+    pub fn generate_token(&mut self, repo_id: &Uuid) -> Option<AccessToken> {
+        let mut o = self.repositories.get_mut(repo_id);
         match o {
             None => None,
             Some(ref mut r) => Some(r.generate_token())
         }
     }
 
-    pub fn remove_token(&mut self, id: &Uuid, token: &Uuid) {
+    pub fn remove_token(&mut self, id: &Uuid, token: &AccessToken) {
         let no_tokens = match self.repositories.get_mut(id) {
             None => false,
             Some(ref mut r) => {

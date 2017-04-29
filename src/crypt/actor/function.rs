@@ -139,7 +139,7 @@ fn create_repository_state(pw: HashedPw, repo: Repository, scan_result: &ScanRes
     repo_state
 }
 
-fn close_repository(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
+fn close_repository(id: &Uuid, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, id) {
         state.remove_token(id, token);
         Ok(CryptResponse::RepositoryIsClosed { id: id.clone() })
@@ -148,7 +148,7 @@ fn close_repository(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptR
     }
 }
 
-fn list_files(id: &Uuid, token: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
+fn list_files(id: &Uuid, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, id) {
         let repo = state.get_repository(id).unwrap();//unwrap because check_token returns false on no repo
         let files: Vec<FileHeaderDescriptor> = repo.get_file_headers();
@@ -166,7 +166,7 @@ fn list_repositories(state: &mut State) -> Result<CryptResponse, String> {
 }
 
 
-fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
+fn create_new_file(token: &AccessToken, header: &String, content: &Vec<u8>, repo_id: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
     let result = if state.check_token(token, repo_id) {
         let repostate = state.get_repository(repo_id).unwrap();
         let ref repo = repostate.get_repo();
@@ -192,7 +192,7 @@ fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &U
     }
 }
 
-fn update_file(token: &Uuid, file_descriptor: &FileDescriptor, header: Option<&String>, content: Option<&Vec<u8>>, state: &mut State) -> Result<CryptResponse, String> {
+fn update_file(token: &AccessToken, file_descriptor: &FileDescriptor, header: Option<&String>, content: Option<&Vec<u8>>, state: &mut State) -> Result<CryptResponse, String> {
     let file_id = &file_descriptor.id;
     let repo_id = &file_descriptor.repo;
     let result = if state.check_token(token, repo_id) {
@@ -247,7 +247,7 @@ fn update_file(token: &Uuid, file_descriptor: &FileDescriptor, header: Option<&S
     }
 }
 
-fn delete_file(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
+fn delete_file(token: &AccessToken, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
     let file_id = &file_descriptor.id;
     let repo_id = &file_descriptor.repo;
     let result = if state.check_token(token, repo_id) {
@@ -276,7 +276,7 @@ fn delete_file(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State
     }
 }
 
-fn get_file_header(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
+fn get_file_header(token: &AccessToken, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
     let file_id = &file_descriptor.id;
     let repo_id = &file_descriptor.repo;
     if state.check_token(token, repo_id) {
@@ -294,7 +294,7 @@ fn get_file_header(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut S
     }
 }
 
-fn get_file(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
+fn get_file(token: &AccessToken, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
     let file_id = &file_descriptor.id;
     let repo_id = &file_descriptor.repo;
     if state.check_token(token, repo_id) {
@@ -398,11 +398,11 @@ fn file_deleted(path: &PathBuf, state: &mut State) -> Result<CryptResponse, Stri
     }
 }
 
-fn invalid_token(msg: &str, token: &Uuid) -> Result<CryptResponse, String> {
+fn invalid_token(msg: &str, token: &AccessToken) -> Result<CryptResponse, String> {
     Ok(invalid_token_response_only(msg, token))
 }
 
-fn invalid_token_response_only(msg: &str, token: &Uuid) -> CryptResponse {
+fn invalid_token_response_only(msg: &str, token: &AccessToken) -> CryptResponse {
     let ret = format!("No valid access token {}: {}", token, msg);
     warn! ("{}", ret);
     CryptResponse::InvalidToken(ret)
@@ -516,7 +516,7 @@ pub mod tests {
         assert_eq! (false, state.check_token(&token));
 
         let token = state.generate_token();
-        assert_eq! (false, state.check_token(&Uuid::new_v4()));
+        assert_eq! (false, state.check_token(&AccessToken::new()));
 
         let mut long_ago = Instant::now() - Duration::from_secs(5);
         state.set_token_time(&token, long_ago);
@@ -538,7 +538,7 @@ pub mod tests {
         let token2 = open_repo_get_token(&id, pw, &mut state);
         assert_ne! (token1, token2);
 
-        let invalid_token = Uuid::new_v4();
+        let invalid_token = AccessToken::new();
         let response = close_repository(&id, &invalid_token, &mut state).unwrap();
         let result = match response {
             CryptResponse::InvalidToken(_) => true,
@@ -558,7 +558,7 @@ pub mod tests {
         assert_eq! (0, state.get_repositories().len());
     }
 
-    fn open_repo_get_token(id: &Uuid, pw: &[u8], state: &mut State) -> Uuid {
+    fn open_repo_get_token(id: &Uuid, pw: &[u8], state: &mut State) -> AccessToken {
         let response = open_repository(id, pw, state);
         match response.unwrap() {
             CryptResponse::RepositoryOpened { token, id } => token.clone(),
@@ -647,7 +647,7 @@ pub mod tests {
         state.get_repository(&repo.get_id()).unwrap().get_files().get(&file_id).unwrap();
     }
 
-    fn create_repo_and_file<'a>() -> (Uuid, Uuid, &'a [u8], Uuid, State, TempDir) {
+    fn create_repo_and_file<'a>() -> (AccessToken, Uuid, &'a [u8], Uuid, State, TempDir) {
         let (temp, repo, pw) = create_temp_repo();
         let dir = temp.path().to_path_buf();
 

@@ -60,7 +60,7 @@ impl CryptoActor {
         }
     }
 
-    pub fn open_repository(&self, id: &Uuid, pw: Vec<u8>) -> Option<Uuid> {
+    pub fn open_repository(&self, id: &Uuid, pw: Vec<u8>) -> Option<AccessToken> {
         let cmd = CryptCmd::OpenRepository { id: id.clone(), pw: pw };
 
         if let Some(response) = self.send_unwrap(cmd) {
@@ -97,7 +97,7 @@ impl CryptoActor {
         }
     }
 
-    pub fn close_repository(&self, id: &Uuid, token: &Uuid) -> Option<Uuid> {
+    pub fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
         let cmd = CryptCmd::CloseRepository { id: id.clone(), token: token.clone() };
 
         if let Some(response) = self.send_unwrap(cmd) {
@@ -113,7 +113,7 @@ impl CryptoActor {
         }
     }
 
-    pub fn list_repository_files(&self, id: &Uuid, token: &Uuid) -> Option<Vec<FileHeaderDescriptor>> {
+    pub fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
         let cmd = CryptCmd::ListFiles { id: id.clone(), token: token.clone() };
 
         if let Some(response) = self.send_unwrap(cmd) {
@@ -128,7 +128,7 @@ impl CryptoActor {
             None
         }
     }
-    pub fn create_new_file(&self, repo_id: &Uuid, token: &Uuid, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
+    pub fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
         let cmd = CryptCmd::CreateNewFile { token: token.clone(), header: header, repo: repo_id.clone(), content: content };
 
         if let Some(response) = self.send_unwrap(cmd) {
@@ -143,7 +143,7 @@ impl CryptoActor {
             None
         }
     }
-    pub fn get_file_header(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
+    pub fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
         let cmd = CryptCmd::GetFileHeader { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
 
         if let Some(response) = self.send_unwrap(cmd) {
@@ -159,7 +159,7 @@ impl CryptoActor {
         }
     }
 
-    pub fn get_file(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
+    pub fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
         let cmd = CryptCmd::GetFile { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
 
         if let Some(response) = self.send_unwrap(cmd) {
@@ -175,7 +175,7 @@ impl CryptoActor {
         }
     }
 
-    pub fn update_header(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+    pub fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
         let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
         let cmd = CryptCmd::UpdateHeader { token: token.clone(), file: desc, header: header.to_string() };
 
@@ -192,7 +192,7 @@ impl CryptoActor {
         }
     }
 
-    pub fn update_file(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+    pub fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
         let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
         let cmd = CryptCmd::UpdateFile { token: token.clone(), file: desc, header: header.to_string(), content: content };
 
@@ -209,7 +209,7 @@ impl CryptoActor {
         }
     }
 
-    pub fn delete_file(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+    pub fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
         let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
         let cmd = CryptCmd::DeleteFile { token: token.clone(), file: desc };
 

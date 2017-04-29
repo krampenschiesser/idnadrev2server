@@ -8,18 +8,18 @@ use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CryptCmd {
-    CreateNewFile { token: Uuid, header: String, content: Vec<u8>, repo: Uuid },
-    UpdateHeader { token: Uuid, header: String, file: FileDescriptor },
-    UpdateFile { token: Uuid, header: String, content: Vec<u8>, file: FileDescriptor },
-    DeleteFile { token: Uuid, file: FileDescriptor },
-    GetFileHeader { token: Uuid, file: FileDescriptor },
-    GetFile { token: Uuid, file: FileDescriptor },
+    CreateNewFile { token: AccessToken, header: String, content: Vec<u8>, repo: Uuid },
+    UpdateHeader { token: AccessToken, header: String, file: FileDescriptor },
+    UpdateFile { token: AccessToken, header: String, content: Vec<u8>, file: FileDescriptor },
+    DeleteFile { token: AccessToken, file: FileDescriptor },
+    GetFileHeader { token: AccessToken, file: FileDescriptor },
+    GetFile { token: AccessToken, file: FileDescriptor },
 
     CreateRepository { name: String, pw: Vec<u8>, encryption: EncTypeDto, kdf: PwKdfDto, folder_id: Option<u16> },
     OpenRepository { id: Uuid, pw: Vec<u8> },
-    CloseRepository { token: Uuid, id: Uuid },
+    CloseRepository { token: AccessToken, id: Uuid },
     ListRepositories,
-    ListFiles { token: Uuid, id: Uuid },
+    ListFiles { token: AccessToken, id: Uuid },
 
     FileAdded(PathBuf),
     FileChanged(PathBuf),
@@ -41,8 +41,8 @@ pub enum CryptResponse {
 
     Repositories(Vec<RepositoryDescriptor>),
 
-    RepositoryOpened { token: Uuid, id: Uuid },
-    RepositoryCreated { token: Uuid, id: Uuid },
+    RepositoryOpened { token: AccessToken, id: Uuid },
+    RepositoryCreated { token: AccessToken, id: Uuid },
     RepositoryOpenFailed { id: Uuid },
     RepositoryIsClosed { id: Uuid },
     NoSuchRepository { id: Uuid },

@@ -4,6 +4,15 @@ use super::super::structs::repository::{RepoHeader, Repository};
 use std::time::Instant;
 use uuid::Uuid;
 
+
+use std::fmt::{Display, Formatter};
+use std::fmt;
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct AccessToken {
+    pub id: Uuid,
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EncTypeDto {
     AES,
@@ -19,17 +28,7 @@ pub enum PwKdfDto {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RepositoryDto {
     pub id: Uuid,
-    pub token: Uuid,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct AccessToken {
-    #[cfg(test)]
-    pub last_access: Instant,
-    #[cfg(not(test))]
-    last_access: Instant,
-
-    id: Uuid,
+    pub token: AccessToken,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -73,20 +72,12 @@ impl RepositoryDescriptor {
 
 impl AccessToken {
     pub fn new() -> Self {
-        let id = Uuid::new_v4();
-        AccessToken { id: id, last_access: Instant::now() }
+        AccessToken { id: Uuid::new_v4() }
     }
+}
 
-    pub fn touch(&mut self) {
-        self.last_access = Instant::now();
-    }
-
-    pub fn get_id(&self) -> Uuid {
-        self.id.clone()
-    }
-
-    pub fn get_elapsed_minutes(&self) -> u64 {
-        let secs = self.last_access.elapsed().as_secs();
-        secs * 60
+impl Display for AccessToken {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "Creating repository {}", self.id.simple())
     }
 }

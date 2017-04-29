@@ -3,12 +3,23 @@ use std::collections::hash_map::Values;
 use super::super::dto::FileHeaderDescriptor;
 use super::super::super::structs::file::{EncryptedFile, FileHeader};
 use super::super::super::structs::repository::{Repository, RepoHeader};
-use super::super::dto::AccessToken;
 use super::super::super::structs::crypto::HashedPw;
 use super::super::super::error::CryptError;
+use super::super::dto::AccessToken;
 use uuid::Uuid;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct AccessTokenState {
+    #[cfg(test)]
+    pub last_access: Instant,
+    #[cfg(not(test))]
+    last_access: Instant,
+
+    token: AccessToken,
+}
 
 
 pub struct RepositoryState {
@@ -16,24 +27,47 @@ pub struct RepositoryState {
     error_files: Vec<(PathBuf, String)>,
     key: HashedPw,
     repo: Repository,
-    tokens: HashMap<Uuid, AccessToken>,
+    tokens: HashMap<Uuid, AccessTokenState>,
 }
 
+impl AccessTokenState {
+    pub fn new() -> Self {
+        let token = AccessToken::new();
+        AccessTokenState { token: token, last_access: Instant::now() }
+    }
+
+    pub fn touch(&mut self) {
+        self.last_access = Instant::now();
+    }
+
+    pub fn get_id(&self) -> Uuid {
+        self.token.id.clone()
+    }
+
+    pub fn get_token(&self) -> AccessToken {
+        self.token.clone()
+    }
+
+    pub fn get_elapsed_minutes(&self) -> u64 {
+        let secs = self.last_access.elapsed().as_secs();
+        secs * 60
+    }
+}
 
 impl RepositoryState {
     pub fn new(repo: Repository, key: HashedPw) -> Self {
         RepositoryState { key: key, repo: repo, files: HashMap::new(), error_files: Vec::new(), tokens: HashMap::new() }
     }
 
-    pub fn generate_token(&mut self) -> Uuid {
-        let token = AccessToken::new();
-        let retval = token.get_id();
+    pub fn generate_token(&mut self) -> AccessToken {
+        let token = AccessTokenState::new();
+        let retval = token.get_token();
         self.tokens.insert(token.get_id(), token);
         retval
     }
 
-    pub fn remove_token(&mut self, token: &Uuid) {
-        match self.tokens.remove(token) {
+    pub fn remove_token(&mut self, token: &AccessToken) {
+        match self.tokens.remove(&token.id) {
             None => warn!("No token {} present.", token),
             Some(t) => debug!("Removed token {}", token),
         }
@@ -43,8 +77,8 @@ impl RepositoryState {
         !self.tokens.is_empty()
     }
 
-    pub fn check_token(&mut self, token: &Uuid) -> bool {
-        let mut o = self.tokens.get_mut(token);
+    pub fn check_token(&mut self, token: &AccessToken) -> bool {
+        let mut o = self.tokens.get_mut(&token.id);
         match o {
             None => false,
             Some(ref mut t) => {
@@ -114,14 +148,14 @@ impl RepositoryState {
         self.repo.get_name()
     }
     #[cfg(test)]
-    pub fn set_token_time(&mut self, token: &Uuid, time: Instant) {
-        let mut t = self.tokens.get_mut(token).unwrap();
+    pub fn set_token_time(&mut self, token: &AccessToken, time: Instant) {
+        let mut t = self.tokens.get_mut(&token.id).unwrap();
         t.last_access = time;
     }
 
     #[cfg(test)]
-    pub fn get_token_time(&self, token: &Uuid) -> Instant {
-        let t = self.tokens.get(token).unwrap();
+    pub fn get_token_time(&self, token: &AccessToken) -> Instant {
+        let t = self.tokens.get(&token.id).unwrap();
         t.last_access
     }
 }
