@@ -16,7 +16,7 @@ pub enum CryptCmd {
     GetFile { token: AccessToken, file: FileDescriptor },
 
     CreateRepository { name: String, pw: Vec<u8>, encryption: EncTypeDto, kdf: PwKdfDto, folder_id: Option<u16> },
-    OpenRepository { id: Uuid, pw: Vec<u8> },
+    OpenRepository { id: Uuid, user_name: String, pw: Vec<u8> },
     CloseRepository { token: AccessToken, id: Uuid },
     ListRepositories,
     ListFiles { token: AccessToken, id: Uuid },

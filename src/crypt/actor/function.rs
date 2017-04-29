@@ -20,7 +20,7 @@ pub fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String>
     match &cmd {
         //repo commands
         &CryptCmd::CreateRepository { ref name, ref pw, ref encryption, ref kdf, folder_id } => create_repository(name.as_str(), pw.as_slice(), encryption, kdf, folder_id, state),
-        &CryptCmd::OpenRepository { ref id, ref pw } => open_repository(id, pw.as_slice(), state),
+        &CryptCmd::OpenRepository { ref id, ref pw, ref user_name } => open_repository(id, user_name, pw.as_slice(), state),
         &CryptCmd::CloseRepository { ref id, ref token } => close_repository(id, token, state),
         &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
         &CryptCmd::ListRepositories => list_repositories(state),
@@ -43,7 +43,7 @@ pub fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String>
 }
 
 
-fn open_repository(id: &Uuid, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {
+fn open_repository(id: &Uuid, user_name: &String, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {//fixme consider username in token statek
     let pw = PlainPw::new(pw);
 
     if state.has_repository(id) {
@@ -481,7 +481,7 @@ pub mod tests {
 
         let id = repo.get_id();
         let mut state = State::new(vec![dir]).unwrap();
-        let response = open_repository(&id, pw, &mut state).unwrap();
+        let response = open_repository(&id, &"name".to_string(), pw, &mut state).unwrap();
 
         match response {
             CryptResponse::RepositoryOpened { token, id: resp_id } => {
@@ -490,7 +490,7 @@ pub mod tests {
             _ => panic!("No valid response")
         }
 
-        let response = open_repository(&id, pw_wrong, &mut state).unwrap();
+        let response = open_repository(&id, &"name".to_string(), pw_wrong, &mut state).unwrap();
         assert_eq! (CryptResponse::RepositoryOpenFailed { id: id }, response);
 
         let state = state;
@@ -559,7 +559,7 @@ pub mod tests {
     }
 
     fn open_repo_get_token(id: &Uuid, pw: &[u8], state: &mut State) -> AccessToken {
-        let response = open_repository(id, pw, state);
+        let response = open_repository(id, &"name".to_string(), pw, state);
         match response.unwrap() {
             CryptResponse::RepositoryOpened { token, id } => token.clone(),
             _ => panic!("no result token"),

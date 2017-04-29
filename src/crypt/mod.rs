@@ -60,8 +60,8 @@ impl CryptoActor {
         }
     }
 
-    pub fn open_repository(&self, id: &Uuid, pw: Vec<u8>) -> Option<AccessToken> {
-        let cmd = CryptCmd::OpenRepository { id: id.clone(), pw: pw };
+    pub fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
+        let cmd = CryptCmd::OpenRepository { id: id.clone(), user_name: user_name, pw: pw };
 
         if let Some(response) = self.send_unwrap(cmd) {
             match response {
@@ -78,7 +78,7 @@ impl CryptoActor {
 
     pub fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncTypeDto) -> Option<RepositoryDto> {
         #[cfg(debug_assertions)]
-        let scrypt = PwKdfDto::SCrypt { iterations: 4, memory_costs: 4, parallelism:1 };
+        let scrypt = PwKdfDto::SCrypt { iterations: 4, memory_costs: 4, parallelism: 1 };
         #[cfg(not(debug_assertions))]
         let scrypt = PwKdfDto::SCrypt { iterations: 16, memory_costs: 8, parallelism: 1 };
 
@@ -244,7 +244,7 @@ mod tests {
         let repos = actor.list_repositories().unwrap();
         assert_eq!(1, repos.len());
 
-        let token = actor.open_repository(&repo_id, "password".as_bytes().to_vec()).unwrap();
+        let token = actor.open_repository(&repo_id, "name".to_string(), "password".as_bytes().to_vec()).unwrap();
         let files = actor.list_repository_files(&repo_id, &token).unwrap();
         assert_eq!(1, files.len());
 
