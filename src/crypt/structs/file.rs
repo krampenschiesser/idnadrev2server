@@ -2,7 +2,7 @@ use super::super::structs::repository::{RepoHeader, Repository};
 use super::{EncryptionType, MainHeader, FileVersion};
 use super::crypto::HashedPw;
 use super::super::util::{decrypt, encrypt};
-use super::super::error::{CryptError,ParseError};
+use super::super::error::{CryptError, ParseError};
 use super::super::util::tempfile::TempFile;
 use super::super::util::random_vec;
 use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
@@ -180,7 +180,8 @@ impl EncryptedFile {
 
         Ok(())
     }
-    pub fn update_header(&mut self, key: &HashedPw) -> Result<(), CryptError> {
+
+    pub fn update(&mut self, key: &HashedPw, content: Option<Vec<u8>>) -> Result<(), CryptError> {
         let original_enc_header = self.encryption_header.clone();
         self.increment_version();
         let path = self.path.as_ref().ok_or(CryptError::NoFilePath)?;
@@ -192,7 +193,11 @@ impl EncryptedFile {
             return Err(CryptError::OptimisticLockError(header_on_filesystem.get_version()));
         }
 
-        let content = EncryptedFile::load_content(&original_enc_header, key, &path)?;
+        let content = match content {
+            Some(c) => Ok(c),
+            None => EncryptedFile::load_content(&original_enc_header, key, &path),
+        }?;
+        //            EncryptedFile::load_content(&original_enc_header, key, &path)?;
         let additional = self.encryption_header.get_additional_data();
         let ref mut header = self.encryption_header;
 
@@ -329,7 +334,7 @@ mod tests {
         let (mut encrypted_file, key, dir, temp) = create_temp_file();
         let original_version = encrypted_file.get_version();
         encrypted_file.set_header("new header");
-        encrypted_file.update_header(&key);
+        encrypted_file.update(&key,None);
 
         let res = scan(&vec![dir.to_path_buf()]).unwrap();
         let tuple = res.get_files().get(&encrypted_file.get_id()).unwrap();
@@ -358,7 +363,7 @@ mod tests {
         //        remove_file(encrypted_file.get_path().unwrap()).unwrap();
         temp.close().unwrap();
 
-        let res = encrypted_file.update_header(&key);
+        let res = encrypted_file.update(&key,None);
         match res {
             Err(CryptError::FileDoesNotExist(s)) => assert_that(&s).contains("myfile"),
             _ => panic!("Invalid result: {:?}", res),
@@ -369,9 +374,9 @@ mod tests {
     fn update_header_optimisticlockerror() {
         let (mut encrypted_file, key, dir, temp) = create_temp_file();
         let mut clone = encrypted_file.clone();
-        clone.update_header(&key);
+        clone.update(&key,None);
 
-        let res = encrypted_file.update_header(&key);
+        let res = encrypted_file.update(&key,None);
         match res {
             Err(CryptError::OptimisticLockError(v)) => assert_eq!(1, v),
             _ => panic!("Invalid result: {:?}", res),

@@ -16,11 +16,18 @@ use std::path::PathBuf;
 
 fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
     match &cmd {
+        //repo commands
         &CryptCmd::OpenRepository { ref id, ref pw } => open_repository(id, pw.as_slice(), state),
         &CryptCmd::CloseRepository { ref id, ref token } => close_repository(id, token, state),
         &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
         &CryptCmd::ListRepositories => list_repositories(state),
+        //file commands
         &CryptCmd::CreateNewFile { ref token, ref header, ref content, ref repo } => create_new_file(token, header, content, repo, state),
+        &CryptCmd::UpdateHeader { ref token, ref header, ref file } => update_file(token, file, Some(header), None, state),
+        &CryptCmd::UpdateFile { ref token, ref header, ref content, ref file } => update_file(token, file, Some(header), Some(content), state),
+        &CryptCmd::DeleteFile { ref token, ref file } => delete_file(token, file, state),
+
+        //notification commands
         &CryptCmd::FileAdded(ref path) => file_added(path, state),
         &CryptCmd::FileChanged(ref path) => file_changed(path, state),
         &CryptCmd::FileDeleted(ref path) => file_deleted(path, state),
@@ -134,7 +141,7 @@ fn create_new_file(token: &Uuid, header: &String, content: &Vec<u8>, repo_id: &U
     }
 }
 
-fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &String, state: &mut State) -> Result<CryptResponse, String> {
+fn update_file(token: &Uuid, file_descriptor: &FileDescriptor, header: Option<&String>, content: Option<&Vec<u8>>, state: &mut State) -> Result<CryptResponse, String> {
     let file_id = &file_descriptor.id;
     let repo_id = &file_descriptor.repo;
     let result = if state.check_token(token, repo_id) {
@@ -148,8 +155,14 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
                 let current_version = file.get_encryption_header().get_version();
                 if current_version <= file_descriptor.version {
                     let mut cloned = file.clone();
-                    cloned.set_header(header);
-                    match cloned.update_header(&key) {
+
+                    if let Some(h) = header {
+                        cloned.set_header(h);
+                    }
+//                    header.map(|h| cloned.set_header(h));
+
+                    let res = cloned.update(&key, content.cloned());
+                    match res {
                         Ok(_) => Ok(file.get_path().unwrap()),
                         Err(e) => {
                             let error = format!("Could not update header of {} : {:?}", cloned.get_id(), e);
@@ -183,6 +196,10 @@ fn update_file_header(token: &Uuid, file_descriptor: &FileDescriptor, header: &S
     }
 }
 
+fn delete_file(token: &Uuid, file: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
+    unimplemented!()
+}
+
 fn unrecognized_file(msg: String, level: LogLevel) -> Result<CryptResponse, String> {
     log!(level, "{}", msg);
     Ok(CryptResponse::UnrecognizedFile(msg))
@@ -206,8 +223,6 @@ fn create_or_update_file(path: &PathBuf, state: &mut State, create: bool) -> Res
             if create {
                 Ok(CryptResponse::FileCreated(descriptor))
             } else {
-                //                let header = state.get_repository(&repo_id).unwrap().get_file(&id).unwrap().get_header().to_string();
-                //                let descriptor = FileHeaderDescriptor { header: header, descriptor: descriptor };
                 Ok(CryptResponse::FileChanged(descriptor))
             }
         }
@@ -501,7 +516,7 @@ mod tests {
         let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
 
         let descriptor = FileDescriptor { id: file_id, repo: repo_id, version: 0 };
-        let result = update_file_header(&token, &descriptor, &"bla".to_string(), &mut state).unwrap();
+        let result = update_file(&token, &descriptor, Some(&"bla".to_string()), None, &mut state).unwrap();
         match result {
             CryptResponse::File(desc) => {
                 assert_eq!("bla", desc.header);
@@ -546,7 +561,7 @@ mod tests {
             let key = state.get_repository(&repo_id).unwrap().get_key().clone();
             let mut encrypted_file: EncryptedFile = state.get_repository_mut(&repo_id).unwrap().get_file_mut(&file_id).unwrap().clone();
             encrypted_file.set_header("HUHU");
-            encrypted_file.update_header(&key);
+            encrypted_file.update(&key, None);
 
             let p = encrypted_file.get_path().unwrap();
             p
