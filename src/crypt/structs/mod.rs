@@ -76,15 +76,14 @@ impl PasswordHashType {
             PasswordHashType::None => 0,
         }
     }
-    pub fn hash(&self, input: &[u8],/*salt:&[u8],*/ len: usize) -> Vec<u8> {
+    pub fn hash(&self, input: &[u8], salt: &[u8], len: usize) -> Vec<u8> {
         match *self {
             PasswordHashType::None => input.to_vec(),
             PasswordHashType::SCrypt { iterations, memory_costs, parallelism } => {
                 let mut buff = vec![0u8; len];
                 let param = ScryptParams::new(iterations, memory_costs, parallelism);
                 let now = Instant::now();
-                scrypt(input, input, &param, buff.as_mut_slice());//fixme use salt!!wtf!
-//                scrypt(input, salt, &param, buff.as_mut_slice());
+                scrypt(input, salt, &param, buff.as_mut_slice());
 
                 debug!("Scrypt took {}s", Duration::from_std(now.elapsed()).unwrap().num_milliseconds());
                 buff

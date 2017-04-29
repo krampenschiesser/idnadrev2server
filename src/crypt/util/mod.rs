@@ -53,7 +53,8 @@ mod tests {
 
     fn hashed_key() -> HashedPw {
         let plainpw = PlainPw::new("hello".as_bytes());
-        HashedPw::new(plainpw, &EncryptionType::RingChachaPoly1305, &PasswordHashType::SCrypt { iterations: 1, memory_costs: 1, parallelism: 1 })
+        let salt ="hello".as_bytes();
+        HashedPw::new(plainpw, &EncryptionType::RingChachaPoly1305, &PasswordHashType::SCrypt { iterations: 1, memory_costs: 1, parallelism: 1 },salt)
     }
 
     fn nonce() -> Vec<u8> {

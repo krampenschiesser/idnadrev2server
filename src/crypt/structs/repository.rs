@@ -56,13 +56,17 @@ impl RepoHeader {
         self.main_header.to_bytes(&mut v);
         v
     }
+
+    pub fn get_salt(&self) -> &Vec<u8> {
+        &self.salt
+    }
 }
 
 impl Repository {
     pub fn new(name: &str, pw: PlainPw, header: RepoHeader) -> Self {
         let checksum = {
-            let v = Repository::hash_key_ext(&header.encryption_type, &header.password_hash_type, pw);
-            Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, &v)
+            let v = Repository::hash_key_ext(&header.encryption_type, &header.password_hash_type, pw,header.get_salt().as_slice());
+            Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, &v,header.get_salt().as_slice())
         };
         Repository { header: header, hash: checksum, name: name.into(), path: None }
     }
@@ -87,19 +91,19 @@ impl Repository {
     }
 
     pub fn hash_key(&self, pw_plain: PlainPw) -> HashedPw {
-        Repository::hash_key_ext(&self.header.encryption_type, &self.header.password_hash_type, pw_plain)
+        Repository::hash_key_ext(&self.header.encryption_type, &self.header.password_hash_type, pw_plain,self.header.get_salt().as_slice())
     }
 
     pub fn hash_pw(&self, pw: &HashedPw) -> DoubleHashedPw {
-        Repository::hash_pw_ext(&self.header.encryption_type, &self.header.password_hash_type, pw)
+        Repository::hash_pw_ext(&self.header.encryption_type, &self.header.password_hash_type, pw,self.header.get_salt().as_slice())
     }
 
-    pub fn hash_key_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: PlainPw) -> HashedPw {
-        HashedPw::new(pw_plain, enc_type, hash_type)
+    pub fn hash_key_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: PlainPw,salt: &[u8]) -> HashedPw {
+        HashedPw::new(pw_plain, enc_type, hash_type,salt)
     }
 
-    pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw: &HashedPw) -> DoubleHashedPw {
-        DoubleHashedPw::new(pw, enc_type, hash_type)
+    pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw: &HashedPw,salt: &[u8]) -> DoubleHashedPw {
+        DoubleHashedPw::new(pw, enc_type, hash_type,salt)
     }
 
     pub fn check_plain_pw(&self, pw_plain: PlainPw) -> bool {

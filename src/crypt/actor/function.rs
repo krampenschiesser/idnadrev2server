@@ -95,9 +95,9 @@ fn create_repository(name: &str, pw: &[u8], enc: &EncTypeDto, kdf: &PwKdfDto, fo
     let pw = PlainPw::new(pw);
     let enc_type = EncryptionType::from(enc);
     let pwh = PasswordHashType::from(kdf);
-    let key = HashedPw::new(pw.clone(), &enc_type, &pwh);
 
-    let header = RepoHeader::new(pwh, enc_type);
+    let header = RepoHeader::new(pwh.clone(), enc_type.clone());
+    let key = HashedPw::new(pw.clone(), &enc_type, &pwh, header.get_salt());
 
     let mut repo = Repository::new(name, pw, header);
     let path = path.join(format!("{}", repo.get_id().clone().simple()));

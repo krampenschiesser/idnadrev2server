@@ -6,14 +6,17 @@ use ring::constant_time::verify_slices_are_equal;
 pub struct PlainPw {
     content: Vec<u8>
 }
+
 #[derive(Clone)]
 pub struct HashedPw {
     content: Vec<u8>
 }
+
 #[derive(Clone, Debug)]
 pub struct DoubleHashedPw {
     content: Vec<u8>
 }
+
 impl PlainPw {
     pub fn new(pw_plain: &[u8]) -> Self {
         PlainPw { content: pw_plain.to_vec() }
@@ -24,7 +27,7 @@ impl PlainPw {
     }
 }
 
-impl <'a>From<&'a str> for PlainPw {
+impl<'a> From<&'a str> for PlainPw {
     fn from(i: &str) -> Self {
         PlainPw::new(i.as_bytes())
     }
@@ -37,9 +40,9 @@ impl From<String> for PlainPw {
 }
 
 impl HashedPw {
-    pub fn new(plain: PlainPw, enc_type: &EncryptionType, hash_type: &PasswordHashType) -> Self {
+    pub fn new(plain: PlainPw, enc_type: &EncryptionType, hash_type: &PasswordHashType, salt: &[u8]) -> Self {
         let len = enc_type.key_len();
-        let v = hash_type.hash(plain.as_slice(), len);
+        let v = hash_type.hash(plain.as_slice(), salt, len);
         HashedPw { content: v }
     }
 
@@ -59,9 +62,9 @@ impl PartialEq for HashedPw {
 
 
 impl DoubleHashedPw {
-    pub fn new(hashed: &HashedPw, enc_type: &EncryptionType, hash_type: &PasswordHashType) -> Self {
+    pub fn new(hashed: &HashedPw, enc_type: &EncryptionType, hash_type: &PasswordHashType, salt: &[u8]) -> Self {
         let len = enc_type.key_len();
-        let v = hash_type.hash(hashed.as_slice(), len);
+        let v = hash_type.hash(hashed.as_slice(), salt, len);
         DoubleHashedPw { content: v }
     }
 
