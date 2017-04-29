@@ -88,6 +88,21 @@ impl CryptoActor {
             None
         }
     }
+    pub fn close_repository(&self, id: &Uuid, token: &Uuid) -> Option<Uuid> {
+        let cmd = CryptCmd::CloseRepository { id: id.clone(), token: token.clone() };
+
+        if let Some(response) = self.send_unwrap(cmd) {
+            match response {
+                CryptResponse::RepositoryIsClosed { id } => Some(id),
+                o => {
+                    error!("Got wrong response while closing repository {}: {}", id, o);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
 
     pub fn list_repository_files(&self, id: &Uuid, token: &Uuid) -> Option<Vec<FileHeaderDescriptor>> {
         let cmd = CryptCmd::ListFiles { id: id.clone(), token: token.clone() };
@@ -134,6 +149,7 @@ impl CryptoActor {
             None
         }
     }
+
     pub fn get_file(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
         let cmd = CryptCmd::GetFile { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
 
@@ -149,15 +165,68 @@ impl CryptoActor {
             None
         }
     }
+
+    pub fn update_header(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+        let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
+        let cmd = CryptCmd::UpdateHeader { token: token.clone(), file: desc, header: header.to_string() };
+
+        if let Some(response) = self.send_unwrap(cmd) {
+            match response {
+                CryptResponse::File(descriptor) => Some(descriptor),
+                o => {
+                    error!("Got wrong response while trying to update file header {}: {}", file_id, o);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn update_file(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+        let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
+        let cmd = CryptCmd::UpdateFile { token: token.clone(), file: desc, header: header.to_string(), content: content };
+
+        if let Some(response) = self.send_unwrap(cmd) {
+            match response {
+                CryptResponse::File(descriptor) => Some(descriptor),
+                o => {
+                    error!("Got wrong response while trying to update file {}: {}", file_id, o);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn delete_file(&self, repo_id: &Uuid, token: &Uuid, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+        let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
+        let cmd = CryptCmd::DeleteFile { token: token.clone(), file: desc };
+
+        if let Some(response) = self.send_unwrap(cmd) {
+            match response {
+                CryptResponse::FileDeleted(descriptor) => Some(descriptor),
+                o => {
+                    error!("Got wrong response while trying to delete file {}: {}", file_id, o);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use self::super::actor::function::tests::create_temp_repo;
+    use log4rs;
 
     #[test]
-    fn test_start() {
+    fn test_full_process() {
+        log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
         let (temp, repo, pw) = create_temp_repo();
         let repo_id = repo.get_id();
 
@@ -181,5 +250,20 @@ mod tests {
         let (header, content) = actor.get_file(&repo_id, &token, &new_file.id).unwrap();
         assert_eq!("Hallo Header", header.header);
         assert_eq!(vec![4, 2], content);
+
+        let new_file = actor.update_header(&repo_id, &token, &new_file.id, new_file.version, "New Header").unwrap();
+        let header = actor.get_file_header(&repo_id, &token, &new_file.descriptor.id).unwrap();
+        assert_eq!("New Header", header.header);
+
+        let new_file = actor.update_file(&repo_id, &token, &new_file.descriptor.id, new_file.descriptor.version, "Other Header", vec![47, 11]).unwrap();
+        let (header, content) = actor.get_file(&repo_id, &token, &new_file.descriptor.id).unwrap();
+        assert_eq!("Other Header", header.header);
+        assert_eq!(vec![47, 11], content);
+
+        actor.delete_file(&repo_id, &token, &new_file.descriptor.id, new_file.descriptor.version).unwrap();
+        let files = actor.list_repository_files(&repo_id, &token).unwrap();
+        assert_eq!(1, files.len());
+
+        actor.close_repository(&repo_id, &token).unwrap();
     }
 }

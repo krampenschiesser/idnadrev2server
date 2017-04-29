@@ -81,29 +81,29 @@ impl Display for CryptCmd {
 impl Display for CryptResponse {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            CryptResponse::FileCreated(ref desc) => write!(f, "Created file: {}", &desc.id),
-            CryptResponse::FileChanged(ref desc) => write!(f, "Changed file: {}", &desc.id),
-            CryptResponse::FileDeleted(ref desc) => write!(f, "Deleted file: {}", &desc.id),
+            CryptResponse::FileCreated(ref desc) => write!(f, "CryptResponse::FileCreated: Created file: {}", &desc.id),
+            CryptResponse::FileChanged(ref desc) => write!(f, "CryptResponse::FileChanged: Changed file: {}", &desc.id),
+            CryptResponse::FileDeleted(ref desc) => write!(f, "CryptResponse::FileDeleted: Deleted file: {}", &desc.id),
 
-            CryptResponse::File(ref fh) => write!(f, "File {}: {}", &fh.descriptor.id, &fh.header),
-            CryptResponse::FileContent(ref fh, _) => write!(f, "File {}: {}", &fh.descriptor.id, &fh.header),
-            CryptResponse::Files(ref files) => write!(f, "Listing of {} files", files.len()),
+            CryptResponse::File(ref fh) => write!(f, "CryptResponse::File: File {}: {}", &fh.descriptor.id, &fh.header),
+            CryptResponse::FileContent(ref fh, _) => write!(f, "CryptResponse::FileContent: File {}: {}", &fh.descriptor.id, &fh.header),
+            CryptResponse::Files(ref files) => write!(f, "CryptResponse::Files: Listing of {} files", files.len()),
 
-            CryptResponse::Repositories(ref repos) => write!(f, "Listing of {} repos", repos.len()),
+            CryptResponse::Repositories(ref repos) => write!(f, "CryptResponse::Repositories: Listing of {} repos", repos.len()),
 
-            CryptResponse::RepositoryOpened { ref id, .. } => write!(f, "Opened repository {}", id),
-            CryptResponse::RepositoryOpenFailed { ref id } => write!(f, "Failed to open repository {}", id),
-            CryptResponse::RepositoryIsClosed { ref id } => write!(f, "Repository is closed {}", id),
-            CryptResponse::NoSuchRepository { ref id } => write!(f, "Repositroy does not exist {}", id),
+            CryptResponse::RepositoryOpened { ref id, .. } => write!(f, "CryptResponse::RepositoryOpened: Opened repository {}", id),
+            CryptResponse::RepositoryOpenFailed { ref id } => write!(f, "CryptResponse::RepositoryOpenFailed: Failed to open repository {}", id),
+            CryptResponse::RepositoryIsClosed { ref id } => write!(f, "CryptResponse::RepositoryIsClosed: Repository is closed {}", id),
+            CryptResponse::NoSuchRepository { ref id } => write!(f, "CryptResponse::NoSuchRepository: Repositroy does not exist {}", id),
 
-            CryptResponse::OptimisticLockError { ref file, ref file_version } => write!(f, "File was modified, new_version={} file_version={}, file={}", file_version, &file.version, &file.id),
-            CryptResponse::NoSuchFile(ref file) => write!(f, "No file exists {}", file.id),
-            CryptResponse::AccessDenied => write!(f, "Access denied (playing halflife?)"),
-            CryptResponse::InvalidToken(ref t) => write!(f, "Invalid token {}", t),
-            CryptResponse::UnrecognizedFile(ref reason) => write!(f, "Did not recoginze file: {}", reason),
-            CryptResponse::Error(ref msg) => write!(f, "General error: {}", msg),
+            CryptResponse::OptimisticLockError { ref file, ref file_version } => write!(f, "CryptResponse::OptimisticLockError: File was modified, new_version={} file_version={}, file={}", file_version, &file.version, &file.id),
+            CryptResponse::NoSuchFile(ref file) => write!(f, "CryptResponse::NoSuchFile: No file exists {}", file.id),
+            CryptResponse::AccessDenied => write!(f, "CryptResponse::AccessDenied: Access denied (playing halflife?)"),
+            CryptResponse::InvalidToken(ref t) => write!(f, "CryptResponse::InvalidToken: Invalid token {}", t),
+            CryptResponse::UnrecognizedFile(ref reason) => write!(f, "CryptResponse::UnrecognizedFile: Did not recoginze file: {}", reason),
+            CryptResponse::Error(ref msg) => write!(f, "CryptResponse::Error: General error: {}", msg),
 
-            CryptResponse::Shutdown => write!(f, "Shutdown successful"),
+            CryptResponse::Shutdown => write!(f, "CryptResponse::Shutdown: Shutdown successful"),
         }
     }
 }
