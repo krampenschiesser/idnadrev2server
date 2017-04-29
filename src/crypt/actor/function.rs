@@ -10,9 +10,11 @@ use super::state::repositorystate::RepositoryState;
 use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
 use super::super::error::{CryptError, ParseError};
 
+use std::error::Error;
 use uuid::Uuid;
 use log::LogLevel;
 use std::path::PathBuf;
+use std::fs::remove_file;
 
 fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
     match &cmd {
@@ -159,7 +161,7 @@ fn update_file(token: &Uuid, file_descriptor: &FileDescriptor, header: Option<&S
                     if let Some(h) = header {
                         cloned.set_header(h);
                     }
-//                    header.map(|h| cloned.set_header(h));
+                    //                    header.map(|h| cloned.set_header(h));
 
                     let res = cloned.update(&key, content.cloned());
                     match res {
@@ -196,8 +198,33 @@ fn update_file(token: &Uuid, file_descriptor: &FileDescriptor, header: Option<&S
     }
 }
 
-fn delete_file(token: &Uuid, file: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
-    unimplemented!()
+fn delete_file(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
+    let file_id = &file_descriptor.id;
+    let repo_id = &file_descriptor.repo;
+    let result = if state.check_token(token, repo_id) {
+        if let Some(repo) = state.get_repository(&repo_id) {
+            if let Some(file) = repo.get_file(&file_id) {
+                if let Some(path) = file.get_path() {
+                    match remove_file(&path) {
+                        Ok(_) => Ok(path.clone()),
+                        Err(e) => Err(CryptResponse::Error(e.description().into()))
+                    }
+                } else {
+                    Err(CryptResponse::NoSuchFile(file_descriptor.clone()))
+                }
+            } else {
+                Err(CryptResponse::NoSuchFile(file_descriptor.clone()))
+            }
+        } else {
+            Err(CryptResponse::NoSuchRepository { id: repo_id.clone() })
+        }
+    } else {
+        Err(invalid_token_response_only("Trying to update file with invalid token", token))
+    };
+    match result {
+        Ok(path) => handle(CryptCmd::FileDeleted(path), state),
+        Err(response) => Ok(response)
+    }
 }
 
 fn unrecognized_file(msg: String, level: LogLevel) -> Result<CryptResponse, String> {
@@ -527,6 +554,26 @@ mod tests {
     }
 
     #[test]
+    fn test_delete_file() {
+        let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
+
+        let path = state.get_repository(&repo_id).unwrap().get_file(&file_id).unwrap().get_path().unwrap();
+
+        let descriptor = FileDescriptor { id: file_id, repo: repo_id, version: 0 };
+        let result = delete_file(&token, &descriptor, &mut state).unwrap();
+        match result {
+            CryptResponse::FileDeleted(desc) => {
+                assert_eq!(file_id, desc.id);
+            }
+            _ => panic!("Did not delete file. Result: {:?}", result),
+        }
+        let res = state.get_repository(&repo_id).unwrap().get_file(&file_id);
+        assert!(res.is_none());
+        assert!(!state.get_scan_result().has_file(&file_id));
+        assert!(!path.exists());
+    }
+
+    #[test]
     fn test_file_added() {
         let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
 
@@ -551,6 +598,7 @@ mod tests {
                 panic!("Should have added file to repo but got {:?}", e);
             }
         }
+        state.get_repository(&repo_id).unwrap().get_file(&file_id).unwrap();
     }
 
     #[test]
@@ -612,6 +660,8 @@ mod tests {
         assert!(!state.get_repository_mut(&repo_id).unwrap().get_files().contains_key(&file_id));
         assert!(!state.get_scan_result().has_file(&file_id));
     }
+
+
 
     //fixme add tests for repo added/updated/deleted
 
