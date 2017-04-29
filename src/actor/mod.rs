@@ -33,12 +33,21 @@ impl<Command, Response> ActorControl<Command, Response>
         self.sender.clone()
     }
 
-    pub fn send_sync(&self, cmd: Command) -> Result<Result<Response, String>, String> {
+    pub fn send_sync(&self, cmd: Command) -> Result<Response, String> {
         let (s2, r2) = channel();
         self.sender.send((s2, cmd));
 
         let result = r2.recv();
-        result.map_err(|e| e.description().to_string())
+        let result = result.map_err(|e| e.description().to_string());
+        match result {
+            Err(string) => Err(string),
+            Ok(result) => {
+                match result {
+                    Err(string) => Err(string),
+                    Ok(response) => Ok(response)
+                }
+            }
+        }
     }
 }
 
@@ -116,7 +125,7 @@ mod tests {
         info!("Communcation test!");
         let (mut actor, control) = Actor::start(state, handle, TestCmd::Shutdown);
         thread::spawn(move || actor.run());
-        let resp = control.send_sync(TestCmd::Hello).unwrap().unwrap();
+        let resp = control.send_sync(TestCmd::Hello).unwrap();
         assert_eq!(TestResponse::World{content: "Count: 1".to_string()}, resp);
         control.stop();
     }

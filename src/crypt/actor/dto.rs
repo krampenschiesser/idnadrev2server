@@ -27,7 +27,7 @@ pub struct FileHeaderDescriptor {
     pub header: String,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RepositoryDescriptor {
     pub id: Uuid,
     pub name: String,

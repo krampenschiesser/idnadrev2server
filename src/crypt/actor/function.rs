@@ -16,7 +16,7 @@ use log::LogLevel;
 use std::path::PathBuf;
 use std::fs::remove_file;
 
-fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
+pub fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
     match &cmd {
         //repo commands
         &CryptCmd::OpenRepository { ref id, ref pw } => open_repository(id, pw.as_slice(), state),
@@ -28,12 +28,16 @@ fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String> {
         &CryptCmd::UpdateHeader { ref token, ref header, ref file } => update_file(token, file, Some(header), None, state),
         &CryptCmd::UpdateFile { ref token, ref header, ref content, ref file } => update_file(token, file, Some(header), Some(content), state),
         &CryptCmd::DeleteFile { ref token, ref file } => delete_file(token, file, state),
+        &CryptCmd::GetFileHeader { ref token, ref file } => get_file_header(token, file, state),
+        &CryptCmd::GetFile { ref token, ref file } => get_file(token, file, state),
+
 
         //notification commands
         &CryptCmd::FileAdded(ref path) => file_added(path, state),
         &CryptCmd::FileChanged(ref path) => file_changed(path, state),
         &CryptCmd::FileDeleted(ref path) => file_deleted(path, state),
-        _ => Err("dooo".to_string())
+
+        &CryptCmd::Shutdown => Ok(CryptResponse::Shutdown),
     }
 }
 
@@ -227,6 +231,54 @@ fn delete_file(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State
     }
 }
 
+fn get_file_header(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
+    let file_id = &file_descriptor.id;
+    let repo_id = &file_descriptor.repo;
+    if state.check_token(token, repo_id) {
+        if let Some(repo) = state.get_repository(&repo_id) {
+            if let Some(file) = repo.get_file(&file_id) {
+                Ok(CryptResponse::File(FileHeaderDescriptor::new(file)))
+            } else {
+                Ok(CryptResponse::NoSuchFile(file_descriptor.clone()))
+            }
+        } else {
+            Ok(CryptResponse::NoSuchRepository { id: repo_id.clone() })
+        }
+    } else {
+        Ok(invalid_token_response_only("Trying to update file with invalid token", token))
+    }
+}
+
+fn get_file(token: &Uuid, file_descriptor: &FileDescriptor, state: &mut State) -> Result<CryptResponse, String> {
+    let file_id = &file_descriptor.id;
+    let repo_id = &file_descriptor.repo;
+    if state.check_token(token, repo_id) {
+        if let Some(repo) = state.get_repository(&repo_id) {
+            if let Some(file) = repo.get_file(&file_id) {
+                if let Some(path) = file.get_path() {
+                    let content = EncryptedFile::load_content(file.get_encryption_header(), repo.get_key(), &path);
+                    match content {
+                        Err(err) => {
+                            Ok(CryptResponse::Error(format!("{}", err)))
+                        }
+                        Ok(content) => {
+                            Ok(CryptResponse::FileContent(FileHeaderDescriptor::new(file), content))
+                        }
+                    }
+                } else {
+                    Ok(CryptResponse::UnrecognizedFile(format!("{}", file.get_id().simple())))
+                }
+            } else {
+                Ok(CryptResponse::NoSuchFile(file_descriptor.clone()))
+            }
+        } else {
+            Ok(CryptResponse::NoSuchRepository { id: repo_id.clone() })
+        }
+    } else {
+        Ok(invalid_token_response_only("Trying to update file with invalid token", token))
+    }
+}
+
 fn unrecognized_file(msg: String, level: LogLevel) -> Result<CryptResponse, String> {
     log!(level, "{}", msg);
     Ok(CryptResponse::UnrecognizedFile(msg))
@@ -303,7 +355,7 @@ fn invalid_token_response_only(msg: &str, token: &Uuid) -> CryptResponse {
 
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use super::super::super::structs::repository::{Repository, RepoHeader};
     use super::super::super::structs::file::{FileHeader, EncryptedFile};
@@ -318,7 +370,7 @@ mod tests {
     use super::super::super::util::io::{check_map_path};
     use super::super::state::scanresult::CheckRes;
 
-    fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
+    pub fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
         let tempdir = TempDir::new("temp_repo").unwrap();
         let header = RepoHeader::new_for_test();
         let pw = PlainPw::new("password".as_bytes());
@@ -574,6 +626,35 @@ mod tests {
     }
 
     #[test]
+    fn test_get_file_header() {
+        let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
+
+        let descriptor = FileDescriptor { id: file_id, repo: repo_id, version: 0 };
+        let result = get_file_header(&token, &descriptor, &mut state).unwrap();
+        match result {
+            CryptResponse::File(fhd) => {
+                assert_eq!("test header 2".to_string(), fhd.header);
+            }
+            _ => panic!("Did not get file header. Result: {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_get_file() {
+        let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
+
+        let descriptor = FileDescriptor { id: file_id, repo: repo_id, version: 0 };
+        let result = get_file(&token, &descriptor, &mut state).unwrap();
+        match result {
+            CryptResponse::FileContent(fhd, content) => {
+                assert_eq!("test header 2".to_string(), fhd.header);
+                assert_eq!("content2".as_bytes(), content.as_slice());
+            }
+            _ => panic!("Did not get file content. Result: {:?}", result),
+        }
+    }
+
+    #[test]
     fn test_file_added() {
         let (token, file_id, pw_bytes, repo_id, mut state, temp) = create_repo_and_file();
 
@@ -660,6 +741,7 @@ mod tests {
         assert!(!state.get_repository_mut(&repo_id).unwrap().get_files().contains_key(&file_id));
         assert!(!state.get_scan_result().has_file(&file_id));
     }
+
 
 
 
