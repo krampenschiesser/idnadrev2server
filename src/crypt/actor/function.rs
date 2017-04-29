@@ -236,8 +236,17 @@ fn file_changed(path: &PathBuf, state: &mut State) -> Result<CryptResponse, Stri
 }
 
 fn file_deleted(path: &PathBuf, state: &mut State) -> Result<CryptResponse, String> {
-
-    Ok(CryptResponse::AccessDenied)
+    let o = state.get_scan_result().get_file_for_path(path.clone());
+    match o {
+        Some(header) => {
+            let id = header.get_id();
+            let repo_id = header.get_repository_id();
+            state.remove_file(&repo_id, &id);
+            let descriptor = FileDescriptor::new(&header);
+            Ok(CryptResponse::FileDeleted(descriptor))
+        }
+        None => Ok(CryptResponse::UnrecognizedFile(path_to_str(path))),
+    }
 }
 
 fn invalid_token(msg: &str, token: &Uuid) -> Result<CryptResponse, String> {

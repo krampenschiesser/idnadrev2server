@@ -18,7 +18,8 @@ pub struct State {
     repositories: HashMap<Uuid, RepositoryState>,
 
     folders: Vec<PathBuf>,
-    scan_result: ScanResult,//fixme get rid of this maybe? double data...
+    scan_result: ScanResult,
+    //fixme get rid of this maybe? double data...
 }
 
 impl State {
@@ -105,5 +106,18 @@ impl State {
 
     pub fn get_scan_result(&self) -> &ScanResult {
         &self.scan_result
+    }
+
+    pub fn remove_file(&mut self, repo_id: &Uuid, file_id: &Uuid) {
+        let mut o = self.repositories.get_mut(repo_id);
+        match o {
+            Some(repo) => {
+                repo.remove_file(file_id);
+            }
+            None => {
+
+            }
+        };
+        self.scan_result.remove_file(file_id);
     }
 }

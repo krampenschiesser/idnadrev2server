@@ -50,8 +50,13 @@ impl ScanResult {
     pub fn get_repositories(&self) -> &Vec<Repository> {
         &self.repositories
     }
+
     pub fn get_files(&self) -> &HashMap<Uuid, (FileHeader, PathBuf)> {
         &self.files
+    }
+
+    pub fn get_file_for_path(&self, path: PathBuf) -> Option<FileHeader> {
+        self.files.values().find(|t| t.1 == path).map(|t| t.0.clone())
     }
 
     pub fn get_files_for_repo(&self, repo_id: &Uuid) -> Vec<(FileHeader, PathBuf)> {
@@ -93,5 +98,9 @@ impl ScanResult {
         if should_insert {
             self.files.insert(file_id.clone(), (header.clone(), path.clone()));
         }
+    }
+
+    pub fn remove_file(&mut self, id: &Uuid) {
+        self.files.remove(id);
     }
 }
