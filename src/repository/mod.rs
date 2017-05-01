@@ -32,7 +32,6 @@ pub enum FileType {
     Text,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RepositoryFile {
     //    #[serde(skip_serializing,skip_deserializing)]

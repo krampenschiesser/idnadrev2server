@@ -20,3 +20,4 @@ pub fn files(file: PathBuf, ui_dir: State<UiDir>) -> Option<NamedFile> {
 pub fn any(any: PathBuf, ui_dir: State<UiDir>) -> io::Result<NamedFile> {
     NamedFile::open(ui_dir.0.join("index.html"))
 }
+

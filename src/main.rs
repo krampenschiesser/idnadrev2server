@@ -1,5 +1,6 @@
 #![feature(plugin)]
 #![feature(custom_attribute)]
+#![feature(custom_derive)]
 #![plugin(rocket_codegen)]
 
 extern crate uuid;
@@ -7,6 +8,7 @@ extern crate rocket;
 extern crate rocket_contrib;
 extern crate chrono;
 extern crate serde;
+#[macro_use]
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
@@ -20,12 +22,14 @@ extern crate notify;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
+extern crate distance;
+
 #[cfg(test)]
 extern crate spectral;
 
 
 mod crypt;
-mod rest;
+pub mod rest;
 mod repository;
 mod state;
 mod dummy;
@@ -37,12 +41,10 @@ use std::path::{PathBuf};
 use rocket::config::{self, ConfigError};
 use std::thread;
 use repository::service::{RepositoryService, Cmd, Response};
+use rest::dto::*;
+use rocket::http::Method::*;
+use rocket::{Route};
 
-
-#[get("/")]
-fn index() -> &'static str {
-    "Hello, world!"
-}
 
 #[derive(Debug)]
 pub struct UiDir(PathBuf);
@@ -79,7 +81,7 @@ fn tryservice() {
 }
 
 use std::time::Instant;
-use ring_pwhash::scrypt::{ScryptParams,scrypt};
+use ring_pwhash::scrypt::{ScryptParams, scrypt};
 
 fn main() {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
@@ -87,7 +89,13 @@ fn main() {
     trace!("Tracing");
     error!("Error!");
     warn!("Warning");
-    tryservice();
+    //    tryservice();
+
+    let r = CreateRepository { name: "myname".to_string(), user_name: "myusername".to_string(), encryption: EncryptionType::ChaCha, password: "Hallo".as_bytes().to_vec() };
+    let json = serde_json::to_string(&r).unwrap();
+    println!("{}", json);
+    let r2 = serde_json::from_str(json.as_str()).unwrap();
+    assert_eq!(r, r2);
 
 
     let state = dummy::new_dummy_data();
@@ -101,11 +109,10 @@ fn main() {
     r.manage(Arc::new(RwLock::new(state)))
         .manage(UiDir(template_dir))
         .mount("/rest/v1", routes![
-        index,
         rest::list_repositories,
         rest::create_repository,
-        rest::list_files,
         rest::open_repository,
+//        rest::close_repository,
         rest::get_file,
         rest::delete_file,
         rest::get_file_header,
@@ -113,6 +120,8 @@ fn main() {
         rest::get_file_content,
         rest::save_file_content,
         ])
+        .mount("/rest/v1", vec![Route::new(Get, "/repo/<id>/?:", rest::list_files)])
+        .mount("/rest/v1", vec![Route::new(Get, "/repo/<id>/<type>/?:", rest::list_files_by_type)])
         .mount("/", routes![
             rest::ui::index,
             rest::ui::any,
