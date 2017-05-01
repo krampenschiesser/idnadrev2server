@@ -4,3 +4,4 @@ key = "localhost.key"
 
 [development]
 ui_dir = "/home/scar/WebstormProjects/idnadrev2ui/build"
+repository_dirs= ["testfolder"]

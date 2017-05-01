@@ -5,7 +5,7 @@ use super::super::util::random_vec;
 use super::super::util::tempfile::TempFile;
 use super::super::util::io::path_to_str;
 use std::path::PathBuf;
-use std::fs::{rename,File};
+use std::fs::{copy, File};
 use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
 use byteorder::{WriteBytesExt, LittleEndian};
@@ -65,8 +65,8 @@ impl RepoHeader {
 impl Repository {
     pub fn new(name: &str, pw: PlainPw, header: RepoHeader) -> Self {
         let checksum = {
-            let v = Repository::hash_key_ext(&header.encryption_type, &header.password_hash_type, pw,header.get_salt().as_slice());
-            Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, &v,header.get_salt().as_slice())
+            let v = Repository::hash_key_ext(&header.encryption_type, &header.password_hash_type, pw, header.get_salt().as_slice());
+            Repository::hash_pw_ext(&header.encryption_type, &header.password_hash_type, &v, header.get_salt().as_slice())
         };
         Repository { header: header, hash: checksum, name: name.into(), path: None }
     }
@@ -91,19 +91,19 @@ impl Repository {
     }
 
     pub fn hash_key(&self, pw_plain: PlainPw) -> HashedPw {
-        Repository::hash_key_ext(&self.header.encryption_type, &self.header.password_hash_type, pw_plain,self.header.get_salt().as_slice())
+        Repository::hash_key_ext(&self.header.encryption_type, &self.header.password_hash_type, pw_plain, self.header.get_salt().as_slice())
     }
 
     pub fn hash_pw(&self, pw: &HashedPw) -> DoubleHashedPw {
-        Repository::hash_pw_ext(&self.header.encryption_type, &self.header.password_hash_type, pw,self.header.get_salt().as_slice())
+        Repository::hash_pw_ext(&self.header.encryption_type, &self.header.password_hash_type, pw, self.header.get_salt().as_slice())
     }
 
-    pub fn hash_key_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: PlainPw,salt: &[u8]) -> HashedPw {
-        HashedPw::new(pw_plain, enc_type, hash_type,salt)
+    pub fn hash_key_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw_plain: PlainPw, salt: &[u8]) -> HashedPw {
+        HashedPw::new(pw_plain, enc_type, hash_type, salt)
     }
 
-    pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw: &HashedPw,salt: &[u8]) -> DoubleHashedPw {
-        DoubleHashedPw::new(pw, enc_type, hash_type,salt)
+    pub fn hash_pw_ext(enc_type: &EncryptionType, hash_type: &PasswordHashType, pw: &HashedPw, salt: &[u8]) -> DoubleHashedPw {
+        DoubleHashedPw::new(pw, enc_type, hash_type, salt)
     }
 
     pub fn check_plain_pw(&self, pw_plain: PlainPw) -> bool {
@@ -141,6 +141,7 @@ impl Repository {
         if path.exists() {
             return Err(CryptError::IOError(format!("Repository {} already exists", path_to_str(path))));
         }
+        debug!("Saving repository {} to {}", self.get_id(), path_to_str(path));
         let mut buff = Vec::new();
         self.to_bytes(&mut buff);
 
@@ -150,8 +151,9 @@ impl Repository {
             tempfile.write(buff.as_slice())?;
             tempfile.sync_all()?;
         }
-        rename(temp.path.clone(), path)?;
-        temp.moved = true;
+        debug!("Wrote repository {} to {}", self.get_id(), path_to_str(path));
+        copy(temp.path.clone(), path)?;
+        debug!("Copied repository");
 
         Ok(())
     }

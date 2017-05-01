@@ -14,8 +14,8 @@ use serde_json;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Repository {
+    pub id: Uuid,
     pub name: String,
-    pub id: Uuid
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

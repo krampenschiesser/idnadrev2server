@@ -1,11 +1,14 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Mutex;
+use thread_local::ThreadLocal;
 use std::thread;
 use std::clone::Clone;
 use std::error::Error;
 use std::fmt::Debug;
 
-pub struct ActorControl<Command, Response> {
-    sender: Sender<(Sender<Result<Response, String>>, Command)>,
+pub struct ActorControl<Command: Send, Response: Send> {
+    sender_share: Mutex<Sender<(Sender<Result<Response, String>>, Command)>>,
+    sender_local: ThreadLocal<Sender<(Sender<Result<Response, String>>, Command)>>,
     shutdown_command: Command,
 }
 
@@ -25,17 +28,13 @@ impl<Command, Response> ActorControl<Command, Response>
 {
     pub fn stop(&self) {
         let (s1, r1) = channel();
-        self.sender.send((s1, self.shutdown_command.clone()));
+        self.get_sender().send((s1, self.shutdown_command.clone()));
         r1.recv();//wait for shutdown
-    }
-
-    pub fn get_sender(&mut self) -> Sender<(Sender<Result<Response, String>>, Command)> {
-        self.sender.clone()
     }
 
     pub fn send_sync(&self, cmd: Command) -> Result<Response, String> {
         let (s2, r2) = channel();
-        self.sender.send((s2, cmd));
+        self.get_sender().send((s2, cmd));
 
         let result = r2.recv();
         let result = result.map_err(|e| e.description().to_string());
@@ -49,17 +48,24 @@ impl<Command, Response> ActorControl<Command, Response>
             }
         }
     }
+
+    fn get_sender(&self) -> &Sender<(Sender<Result<Response, String>>, Command)> {
+        self.sender_local.get_or(|| {
+            let sender= self.sender_share.lock().unwrap();
+            Box::new(sender.clone())
+        })
+    }
 }
 
 impl<Command, Response, State> Actor<Command, Response, State>
     where
-        Command: Clone + Eq + Debug,
-        Response: Clone + Eq + Debug,
+        Command: Clone + Eq + Debug + Send,
+        Response: Clone + Eq + Debug + Send,
 {
     pub fn start(state: State, handler: fn(Command, &mut State) -> Result<Response, String>, shutdown_command: Command) -> (Actor<Command, Response, State>, ActorControl<Command, Response>) {
         let (sender, receiver) = channel();
         let actor = Actor { shutdown_command: shutdown_command.clone(), handler: handler, sender: sender.clone(), receiver: receiver, state: state };
-        let actor_control = ActorControl { shutdown_command: shutdown_command, sender: sender };
+        let actor_control = ActorControl { shutdown_command: shutdown_command, sender_share: Mutex::new(sender), sender_local: ThreadLocal::new() };
         (actor, actor_control)
     }
 
@@ -126,7 +132,7 @@ mod tests {
         let (mut actor, control) = Actor::start(state, handle, TestCmd::Shutdown);
         thread::spawn(move || actor.run());
         let resp = control.send_sync(TestCmd::Hello).unwrap();
-        assert_eq!(TestResponse::World{content: "Count: 1".to_string()}, resp);
+        assert_eq!(TestResponse::World { content: "Count: 1".to_string() }, resp);
         control.stop();
     }
 }

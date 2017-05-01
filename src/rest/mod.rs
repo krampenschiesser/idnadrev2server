@@ -110,8 +110,6 @@
 //!
 
 use rocket_contrib::UUID;
-use state::{RepositoryState, RepoNamesDTO};
-use repository::{RepositoryFile, Repository};
 use rocket::State;
 use rocket::response::Stream;
 use rocket_contrib::{JSON};
@@ -129,14 +127,18 @@ use rocket::{Route, Data, Outcome, Request};
 use rocket::handler;
 use rocket::http::Status;
 use self::searchparam::SearchParam;
+//use self::dto::Repository;
+use state::GlobalState;
+use crypt::CryptoActor;
+use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto};
 
 pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> {
     let search = if let Some(query) = request.uri().query() {
         match SearchParam::from_query_param(query) {
             Err(e) => {
-                error!("{:?}",e);
+                error!("{:?}", e);
                 return Outcome::failure(Status::BadRequest);
-            },
+            }
             Ok(param) => param,
         }
     } else {
@@ -149,25 +151,22 @@ pub fn list_files_by_type<'r>(request: &'r Request, data: Data) -> handler::Outc
     Outcome::of("huhu")
 }
 
-#[derive(Debug)]
-pub struct LockingError;
-
 #[get("/repository")]
-pub fn list_repositories(state: State<Arc<RwLock<RepositoryState>>>) -> Result<JSON<Vec<RepoNamesDTO>>, LockingError> {
-    let s = state.read().map_err(|p| LockingError {})?;
-    Ok(JSON(s.get_repo_names()))
+pub fn list_repositories(state: State<GlobalState>) -> Option<JSON<Vec<RepositoryDescriptor>>> {
+    let c: &CryptoActor = state.crypt();
+    c.list_repositories().map(|v| JSON(v))
 }
 
 #[post("/repository", data = "<create_repo>")]
-pub fn create_repository(create_repo: JSON<CreateRepository>) -> Option<String> {
-    info!("Received : {:?}", create_repo);
-    Some(format!("{:?}", create_repo))
+pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<GlobalState>) -> Option<JSON<RepositoryDto>> {
+    let c: &CryptoActor = state.crypt();
+    c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncTypeDto::ChaCha).map(|v| JSON(v))
 }
-
-#[post("/repository/<repository_id>/open")]
-pub fn open_repository(repository_id: UUID) -> String {
-    format!("{}", repository_id.into_inner().simple())
-}
+//
+//#[post("/repository/<repository_id>/open")]
+//pub fn open_repository(repository_id: UUID) -> String {
+//    format!("{}", repository_id.into_inner().simple())
+//}
 
 //#[get("/repository/<repository_id>")]
 //pub fn list_files(repository_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<JSON<Vec<RepositoryFile>>>, LockingError> {
@@ -175,36 +174,36 @@ pub fn open_repository(repository_id: UUID) -> String {
 //    let option: Option<&Repository> = s.get_repository(&repository_id.into_inner());
 //    Ok(option.map(|r| JSON(r.get_files())))
 //}
-
-#[delete("/repository/<repository_id>/<file_id>")]
-pub fn delete_file(repository_id: UUID, file_id: UUID) {}
-
-#[get("/repository/<repository_id>/<file_id>")]
-pub fn get_file(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<JSON<RepositoryFile>>, LockingError> {
-    get_file_header(repository_id, file_id, state)
-}
-
-#[get("/repository/<repository_id>/<file_id>/head")]
-pub fn get_file_header(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<JSON<RepositoryFile>>, LockingError> {
-    let s = state.read().map_err(|p| LockingError {})?;
-    let repo_option: Option<&Repository> = s.get_repository(&repository_id.into_inner());
-    let file_option = repo_option.map_or(None, |r| r.get_file_header(&file_id));
-    Ok(file_option.map(|f| JSON(f)))
-}
-
-#[post("/repository/<repository_id>/<file_id>/head")]
-pub fn save_file_header(repository_id: UUID, file_id: UUID) {}
-
-#[get("/repository/<repository_id>/<file_id>/content")]
-pub fn get_file_content(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<Stream<Cursor<Vec<u8>>>>, LockingError> {
-    let s = state.read().map_err(|p| LockingError {})?;
-    let repo_option: Option<&Repository> = s.get_repository(&repository_id.into_inner());
-    let content_option: Option<Vec<u8>> = repo_option.map_or(None, |r| r.get_file_content(&file_id));
-    Ok(content_option.map(|c| Stream::from(Cursor::new(c))))
-}
-
-#[post("/repository/<repository_id>/<file_id>/content")]
-pub fn save_file_content(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) {}
+//
+//#[delete("/repository/<repository_id>/<file_id>")]
+//pub fn delete_file(repository_id: UUID, file_id: UUID) {}
+//
+//#[get("/repository/<repository_id>/<file_id>")]
+//pub fn get_file(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<JSON<RepositoryFile>>, LockingError> {
+//    get_file_header(repository_id, file_id, state)
+//}
+//
+//#[get("/repository/<repository_id>/<file_id>/head")]
+//pub fn get_file_header(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<JSON<RepositoryFile>>, LockingError> {
+//    let s = state.read().map_err(|p| LockingError {})?;
+//    let repo_option: Option<&Repository> = s.get_repository(&repository_id.into_inner());
+//    let file_option = repo_option.map_or(None, |r| r.get_file_header(&file_id));
+//    Ok(file_option.map(|f| JSON(f)))
+//}
+//
+//#[post("/repository/<repository_id>/<file_id>/head")]
+//pub fn save_file_header(repository_id: UUID, file_id: UUID) {}
+//
+//#[get("/repository/<repository_id>/<file_id>/content")]
+//pub fn get_file_content(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<Stream<Cursor<Vec<u8>>>>, LockingError> {
+//    let s = state.read().map_err(|p| LockingError {})?;
+//    let repo_option: Option<&Repository> = s.get_repository(&repository_id.into_inner());
+//    let content_option: Option<Vec<u8>> = repo_option.map_or(None, |r| r.get_file_content(&file_id));
+//    Ok(content_option.map(|c| Stream::from(Cursor::new(c))))
+//}
+//
+//#[post("/repository/<repository_id>/<file_id>/content")]
+//pub fn save_file_content(repository_id: UUID, file_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) {}
 
 
 #[cfg(test)]
@@ -214,35 +213,34 @@ mod test {
     use rocket::http::Status;
     use rocket::http::Method::*;
     use std::sync::{Arc, RwLock};
-    use state::RepositoryState;
     use uuid::Uuid;
     use super::dto::*;
     use serde_json;
     use rocket::http::ContentType;
 
-    #[test]
-    fn test_create_repo() {
-        let lock = Arc::new(RwLock::new(RepositoryState::new()));
-        let rocket = rocket::ignite()
-            .manage(lock.clone())
-            .mount("/", routes![super::create_repository]);
-
-        let create_repo = CreateRepository { password: "bla".as_bytes().to_vec(), encryption: EncryptionType::ChaCha, user_name: "user".to_string(), name: "My Repository".to_string() };
-        let json = serde_json::to_string(&create_repo).unwrap();
-
-        let mut req = MockRequest::new(Post, "/repository").body(json);
-        req.add_header(ContentType::JSON);
-
-        let mut response = req.dispatch_with(&rocket);
-        assert_eq!(response.status(), Status::Ok);
-
-        //        fixme reimplemt actual method
-        //        let body_string = response.body().and_then(|b| b.into_string()).unwrap();
-        //        let uuid = Uuid::parse_str(body_string.as_str()).unwrap();
-        //
-        //        {
-        //            let state = lock.read().unwrap();
-        //            assert!(state.get_repository(&uuid).is_some());
-        //        }
-    }
+    //    #[test]
+    //    fn test_create_repo() {
+    //        let lock = Arc::new(RwLock::new(RepositoryState::new()));
+    //        let rocket = rocket::ignite()
+    //            .manage(lock.clone())
+    //            .mount("/", routes![super::create_repository]);
+    //
+    //        let create_repo = CreateRepository { password: "bla".as_bytes().to_vec(), encryption: EncryptionType::ChaCha, user_name: "user".to_string(), name: "My Repository".to_string() };
+    //        let json = serde_json::to_string(&create_repo).unwrap();
+    //
+    //        let mut req = MockRequest::new(Post, "/repository").body(json);
+    //        req.add_header(ContentType::JSON);
+    //
+    //        let mut response = req.dispatch_with(&rocket);
+    //        assert_eq!(response.status(), Status::Ok);
+    //
+    //        fixme reimplemt actual method
+    //        let body_string = response.body().and_then(|b| b.into_string()).unwrap();
+    //        let uuid = Uuid::parse_str(body_string.as_str()).unwrap();
+    //
+    //        {
+    //            let state = lock.read().unwrap();
+    //            assert!(state.get_repository(&uuid).is_some());
+    //        }
+    //    }
 }

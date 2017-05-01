@@ -7,7 +7,7 @@ use super::super::util::tempfile::TempFile;
 use super::super::util::random_vec;
 use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
 use std::path::PathBuf;
-use std::fs::{rename, File};
+use std::fs::{copy, File};
 use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
 use byteorder::{WriteBytesExt, LittleEndian};
@@ -175,8 +175,7 @@ impl EncryptedFile {
             tempfile.sync_all()?;
         }
 
-        rename(temp.path.clone(), path)?;
-        temp.moved = true;
+        copy(temp.path.clone(), path)?;
 
         Ok(())
     }
@@ -217,8 +216,7 @@ impl EncryptedFile {
             tempfile.sync_all()?;
         }
 
-        rename(temp.path.clone(), path)?;
-        temp.moved = true;
+        copy(temp.path.clone(), path)?;
         Ok(())
     }
 

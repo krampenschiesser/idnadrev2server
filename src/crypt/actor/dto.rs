@@ -8,7 +8,7 @@ use uuid::Uuid;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct AccessToken {
     pub id: Uuid,
 }
@@ -25,7 +25,7 @@ pub enum PwKdfDto {
     //Argon,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct RepositoryDto {
     pub id: Uuid,
     pub token: AccessToken,
@@ -44,7 +44,7 @@ pub struct FileHeaderDescriptor {
     pub header: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone,Serialize)]
 pub struct RepositoryDescriptor {
     pub id: Uuid,
     pub name: String,

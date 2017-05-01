@@ -23,6 +23,7 @@ extern crate notify;
 extern crate log;
 extern crate log4rs;
 extern crate distance;
+extern crate thread_local;
 
 #[cfg(test)]
 extern crate spectral;
@@ -32,94 +33,51 @@ mod crypt;
 pub mod rest;
 mod repository;
 mod state;
-mod dummy;
+//mod dummy;
 mod actor;
 
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{channel};
-use std::path::{PathBuf};
+use std::path::{PathBuf, Path};
 use rocket::config::{self, ConfigError};
 use std::thread;
 use repository::service::{RepositoryService, Cmd, Response};
 use rest::dto::*;
 use rocket::http::Method::*;
 use rocket::{Route};
+use state::GlobalState;
+use crypt::actor::communication::{CryptResponse, CryptCmd};
 
 
 #[derive(Debug)]
 pub struct UiDir(PathBuf);
 
 
-fn tryservice() {
-    let (service, mut access) = RepositoryService::new();
-    let sender = access.get_sender();
-
-    let t = thread::spawn(move || {
-        info!("Before work loop");
-        service.work_loop();
-        info!("After work loop");
-    });
-    let mut receivers = Vec::new();
-    for i in 0..20 {
-        let (s2, r2) = channel();
-        sender.send((s2.clone(), Cmd::CreateRepository(format!("Hello #{}", i))));
-        receivers.push(r2);
-    }
-    thread::sleep_ms(1000);
-    for r2 in receivers {
-        let r: Response = r2.recv().unwrap();
-        match r {
-            Response::CreatedRepository(id, name) => info!("Created repo {} with id {}", name, id),
-            _ => info!("other command"),
-        }
-    }
-    info!("Before stopping");
-    access.stop();
-    info!("After stopping");
-    info!("Before joining");
-    t.join();
-}
-
-use std::time::Instant;
-use ring_pwhash::scrypt::{ScryptParams, scrypt};
-
 fn main() {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
-    info!("Starting up!");
-    trace!("Tracing");
-    error!("Error!");
-    warn!("Warning");
-    //    tryservice();
-
-    let r = CreateRepository { name: "myname".to_string(), user_name: "myusername".to_string(), encryption: EncryptionType::ChaCha, password: "Hallo".as_bytes().to_vec() };
-    let json = serde_json::to_string(&r).unwrap();
-    println!("{}", json);
-    let r2 = serde_json::from_str(json.as_str()).unwrap();
-    assert_eq!(r, r2);
-
-
-    let state = dummy::new_dummy_data();
 
     let r = rocket::ignite();
-    let template_dir = config::active().ok_or(ConfigError::NotFound)
-        .map(|config| PathBuf::from(config.get_str("ui_dir").unwrap()))
-        .unwrap();
+    let config = config::active().ok_or(ConfigError::NotFound).unwrap();
+    let template_dir = PathBuf::from(config.get_str("ui_dir").unwrap());
+    let repository_dirs: Vec<PathBuf> = config.get_slice("repository_dirs").unwrap().iter().map(|name| PathBuf::from(name.as_str().unwrap())).collect();
 
+    let state = GlobalState::new(repository_dirs).unwrap();
 
-    r.manage(Arc::new(RwLock::new(state)))
+    r.manage(state)
+        //    r.manage(Arc::new(state))
         .manage(UiDir(template_dir))
-        .mount("/rest/v1", routes![
-        rest::list_repositories,
-        rest::create_repository,
-        rest::open_repository,
-//        rest::close_repository,
-        rest::get_file,
-        rest::delete_file,
-        rest::get_file_header,
-        rest::save_file_header,
-        rest::get_file_content,
-        rest::save_file_content,
-        ])
+                .mount("/rest/v1", routes![
+                rest::list_repositories,
+                rest::create_repository,
+        //        rest::open_repository,
+        //        rest::close_repository,
+        //        rest::get_file,
+        //        rest::delete_file,
+        //        rest::get_file_header,
+        //        rest::save_file_header,
+        //        rest::get_file_content,
+        //        rest::save_file_content,
+                ])
         .mount("/rest/v1", vec![Route::new(Get, "/repo/<id>/?:", rest::list_files)])
         .mount("/rest/v1", vec![Route::new(Get, "/repo/<id>/<type>/?:", rest::list_files_by_type)])
         .mount("/", routes![

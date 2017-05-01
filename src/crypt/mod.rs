@@ -4,7 +4,7 @@ mod util;
 mod error;
 
 use self::actor::state::State;
-use self::error::CryptError;
+pub use self::error::CryptError;
 use self::actor::communication::*;
 use self::actor::handle;
 use actor::{ActorControl, Actor};

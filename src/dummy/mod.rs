@@ -1,5 +1,4 @@
 use uuid::Uuid;
-use state::{RepositoryState};
 use repository::{RepositoryFile, Repository, FileType};
 
 fn create_repo_file(repo_id: &Uuid, name: &str, content: &str) -> RepositoryFile {
