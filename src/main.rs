@@ -72,13 +72,13 @@ fn main() {
 
     let state = GlobalState::new(repository_dirs).unwrap();
 
-    r.manage(state)
+    let mut rocket = r.manage(state)
         //    r.manage(Arc::new(state))
         .manage(UiDir(template_dir))
-                .mount("/rest/v1", routes![
+        .mount("/rest/v1", routes![
                 rest::list_repositories,
                 rest::create_repository,
-        //        rest::open_repository,
+                rest::open_repository,
         //        rest::close_repository,
         //        rest::get_file,
         //        rest::delete_file,
@@ -93,6 +93,15 @@ fn main() {
             rest::ui::index,
             rest::ui::any,
             rest::ui::files,
-            ])
-        .launch();
+            ]);
+
+    #[cfg(debug_assertions)]
+    {
+        rocket = rocket.mount("/rest/v1", routes![
+        rest::open_repo_ping,
+        ]);
+    }
+
+    //        .catch(errors!(rest::not_found))
+    rocket.launch();
 }

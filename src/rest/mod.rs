@@ -132,14 +132,25 @@ pub mod dto;
 mod searchparam;
 mod search;
 
-use rocket::{Route, Data, Outcome, Request};
+use rocket::{Route, Data, Outcome, Request, Response};
+use rocket::response::Body;
 use rocket::handler;
-use rocket::http::Status;
+use rocket::http::{Header, Status, Method};
 use self::searchparam::SearchParam;
 use self::dto::OpenRepository;
 use state::GlobalState;
 use crypt::CryptoActor;
-use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto,AccessToken};
+use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto, AccessToken};
+use serde_json::to_string;
+//
+//#[error(404)]
+//pub fn not_found<'a>(req: &'a Request) -> Response {
+//    if req.method() == Method::Options {
+//        Response::build().status(Status::Ok).finalize()
+//    } else {
+//        Response::build().status(Status::Ok).finalize()
+//    }
+//}
 
 
 pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> {
@@ -161,22 +172,53 @@ pub fn list_files_by_type<'r>(request: &'r Request, data: Data) -> handler::Outc
     Outcome::of("huhu")
 }
 
-#[get("/repository")]
-pub fn list_repositories(state: State<GlobalState>) -> Option<JSON<Vec<RepositoryDescriptor>>> {
+#[get("/repo")]
+pub fn list_repositories(state: State<GlobalState>) -> Response {
     let c: &CryptoActor = state.crypt();
-    c.list_repositories().map(|v| JSON(v))
+    let option = c.list_repositories();
+    let (body, status) = match option {
+        None => ("No result...".to_string(), Status::NotFound),
+        Some(vec) => (to_string(&vec).unwrap(), Status::Ok),
+    };
+
+    Response::build()
+        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
+        .sized_body(Cursor::new(body))
+        .status(status)
+        .finalize()
 }
 
-#[post("/repository", data = "<create_repo>")]
+#[post("/repo", data = "<create_repo>")]
 pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<GlobalState>) -> Option<JSON<RepositoryDto>> {
     let c: &CryptoActor = state.crypt();
     c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncTypeDto::ChaCha).map(|v| JSON(v))
 }
 
-#[post("/repository/<repo_id>", data="<open>")]
-pub fn open_repository(repo_id: UUID, open: JSON<OpenRepository>, state: State<GlobalState>) -> Option<JSON<AccessToken>> {
+#[cfg(debug_assertions)]
+#[options("/repo/<repo_id>")]
+pub fn open_repo_ping(repo_id: UUID) -> Response<'static> {
+    Response::build()
+        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
+        .raw_header("Access-Control-Allow-Methods", "POST")
+        .raw_header("Access-Control-Allow-Headers", "content-type, token")
+        .status(Status::Ok)
+        .finalize()
+}
+
+#[post("/repo/<repo_id>", data = "<open>")]
+pub fn open_repository(repo_id: UUID, open: JSON<OpenRepository>, state: State<GlobalState>) -> Response {
     let c: &CryptoActor = state.crypt();
-    c.open_repository(&repo_id,open.user_name.clone(),open.password.clone()).map(|v|JSON(v))
+    let option = c.open_repository(&repo_id, open.user_name.clone(), open.password.clone());
+    let (body, status) = match option {
+        None => ("No result...".to_string(), Status::NotFound),
+        Some(res) => (to_string(&res).unwrap(), Status::Ok),
+    };
+
+    Response::build()
+        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
+        .sized_body(Cursor::new(body))
+        .status(status)
+        .finalize()
 }
 
 //#[get("/repository/<repository_id>")]
