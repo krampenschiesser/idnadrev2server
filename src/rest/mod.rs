@@ -1,3 +1,12 @@
+// Copyright 2017 Christian Löhnert. See the COPYRIGHT
+// file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! # Module containing the REST Interface
 //!
 //! Current version of the rest interface is v1. This might change in the future if changes are nessessary.
@@ -127,10 +136,11 @@ use rocket::{Route, Data, Outcome, Request};
 use rocket::handler;
 use rocket::http::Status;
 use self::searchparam::SearchParam;
-//use self::dto::Repository;
+use self::dto::OpenRepository;
 use state::GlobalState;
 use crypt::CryptoActor;
-use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto};
+use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto,AccessToken};
+
 
 pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> {
     let search = if let Some(query) = request.uri().query() {
@@ -162,11 +172,12 @@ pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<Globa
     let c: &CryptoActor = state.crypt();
     c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncTypeDto::ChaCha).map(|v| JSON(v))
 }
-//
-//#[post("/repository/<repository_id>/open")]
-//pub fn open_repository(repository_id: UUID) -> String {
-//    format!("{}", repository_id.into_inner().simple())
-//}
+
+#[post("/repository/<repo_id>", data="<open>")]
+pub fn open_repository(repo_id: UUID, open: JSON<OpenRepository>, state: State<GlobalState>) -> Option<JSON<AccessToken>> {
+    let c: &CryptoActor = state.crypt();
+    c.open_repository(&repo_id,open.user_name.clone(),open.password.clone()).map(|v|JSON(v))
+}
 
 //#[get("/repository/<repository_id>")]
 //pub fn list_files(repository_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<JSON<Vec<RepositoryFile>>>, LockingError> {
