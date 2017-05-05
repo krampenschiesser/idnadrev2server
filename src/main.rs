@@ -98,7 +98,8 @@ fn main() {
     #[cfg(debug_assertions)]
     {
         rocket = rocket.mount("/rest/v1", routes![
-        rest::open_repo_ping,
+        rest::cors::open_repo_ping,
+        rest::cors::create_repository,
         ]);
     }
 

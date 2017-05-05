@@ -127,6 +127,10 @@ use std::sync::{RwLock, Arc};
 use self::dto::CreateRepository;
 use uuid::Uuid;
 
+
+#[cfg(debug_assertions)]
+pub mod cors;
+
 pub mod ui;
 pub mod dto;
 mod searchparam;
@@ -189,22 +193,20 @@ pub fn list_repositories(state: State<GlobalState>) -> Response {
 }
 
 #[post("/repo", data = "<create_repo>")]
-pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<GlobalState>) -> Option<JSON<RepositoryDto>> {
+pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<GlobalState>) -> Response {
     let c: &CryptoActor = state.crypt();
-    c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncTypeDto::ChaCha).map(|v| JSON(v))
-}
+    let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncTypeDto::ChaCha);
+    let (body, status) = match option {
+        None => ("No result...".to_string(), Status::NotFound),
+        Some(res) => (to_string(&res).unwrap(), Status::Ok),
+    };
 
-#[cfg(debug_assertions)]
-#[options("/repo/<repo_id>")]
-pub fn open_repo_ping(repo_id: UUID) -> Response<'static> {
     Response::build()
         .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .raw_header("Access-Control-Allow-Methods", "POST")
-        .raw_header("Access-Control-Allow-Headers", "content-type, token")
-        .status(Status::Ok)
+        .sized_body(Cursor::new(body))
+        .status(status)
         .finalize()
 }
-
 #[post("/repo/<repo_id>", data = "<open>")]
 pub fn open_repository(repo_id: UUID, open: JSON<OpenRepository>, state: State<GlobalState>) -> Response {
     let c: &CryptoActor = state.crypt();
