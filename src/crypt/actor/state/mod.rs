@@ -122,6 +122,7 @@ impl State {
     pub fn get_scan_result(&self) -> &ScanResult {
         &self.scan_result
     }
+
     pub fn get_scan_result_mut(&mut self) -> &mut ScanResult {
         &mut self.scan_result
     }
@@ -138,5 +139,4 @@ impl State {
         };
         self.scan_result.remove_file(file_id);
     }
-
 }

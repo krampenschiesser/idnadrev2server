@@ -43,6 +43,7 @@
 //! |------------------------------------------------|:---------------------------------------------|-------------------------------------------|
 //! |POST /repo                                |Creates a new repository                            |[`CreateRepository`](dto/struct.CreateRepository.html)|
 //! |POST /repo/`<uuid>`                       |Opens an existing repository                        |[`OpenRepository`](dto/struct.OpenRepository.html)|
+//! |POST /repo/`<uuid>`/file                  |Creates a file with header and content              |[`File`](dto/struct.File.html)|
 //! |POST /repo/`<uuid>`/file/`<uui>`          |Update a file with header and, if set, the content too|[`File`](dto/struct.File.html)|
 //!
 //! ## DELETE Methods
@@ -124,7 +125,7 @@ use rocket::response::Stream;
 use rocket_contrib::{JSON};
 use std::io::Cursor;
 use std::sync::{RwLock, Arc};
-use self::dto::CreateRepository;
+use self::dto::{CreateRepository, File};
 use uuid::Uuid;
 
 
@@ -141,11 +142,12 @@ use rocket::response::Body;
 use rocket::handler;
 use rocket::http::{Header, Status, Method};
 use self::searchparam::SearchParam;
-use self::dto::OpenRepository;
+use self::dto::{Page, OpenRepository};
 use state::GlobalState;
 use crypt::CryptoActor;
 use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto, AccessToken};
 use serde_json::to_string;
+use std::path::PathBuf;
 //
 //#[error(404)]
 //pub fn not_found<'a>(req: &'a Request) -> Response {
@@ -156,8 +158,15 @@ use serde_json::to_string;
 //    }
 //}
 
+#[get("/<any..>", rank = 5)]
+pub fn any<'a>(any: PathBuf) -> Response<'a> {
+    Response::build().status(Status::NotFound).raw_header("Access-Control-Allow-Origin", "http://localhost:3000").finalize()
+}
+
 
 pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> {
+    use rocket::request::FromRequest;
+
     let search = if let Some(query) = request.uri().query() {
         match SearchParam::from_query_param(query) {
             Err(e) => {
@@ -169,11 +178,26 @@ pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> 
     } else {
         SearchParam::new()
     };
-    Outcome::of(JSON(search))
+    let token = match AccessToken::from_request(request) {
+        Outcome::Success(t) => t,
+        _ => {
+            return Outcome::Failure(Status::BadRequest);
+        }
+    };
+
+    let state: State<GlobalState> = match State::from_request(request) {
+        Outcome::Success(state) => state,
+        _ => {
+            return Outcome::Failure(Status::BadRequest);
+        }
+    };
+
+    let page = list_files_internal(search, &token, state.inner());
+    Outcome::of(JSON(page))
 }
 
-pub fn list_files_by_type<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> {
-    Outcome::of("huhu")
+fn list_files_internal(search: SearchParam, token: &AccessToken, state: &GlobalState) -> Page {
+    Page::empty()
 }
 
 #[get("/repo")]
@@ -194,6 +218,7 @@ pub fn list_repositories(state: State<GlobalState>) -> Response {
 
 #[post("/repo", data = "<create_repo>")]
 pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<GlobalState>) -> Response {
+    info!("#create_repository");
     let c: &CryptoActor = state.crypt();
     let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncTypeDto::ChaCha);
     let (body, status) = match option {
@@ -207,8 +232,10 @@ pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<Globa
         .status(status)
         .finalize()
 }
+
 #[post("/repo/<repo_id>", data = "<open>")]
 pub fn open_repository(repo_id: UUID, open: JSON<OpenRepository>, state: State<GlobalState>) -> Response {
+    info!("#open_repository");
     let c: &CryptoActor = state.crypt();
     let option = c.open_repository(&repo_id, open.user_name.clone(), open.password.clone());
     let (body, status) = match option {
@@ -223,12 +250,32 @@ pub fn open_repository(repo_id: UUID, open: JSON<OpenRepository>, state: State<G
         .finalize()
 }
 
-//#[get("/repository/<repository_id>")]
-//pub fn list_files(repository_id: UUID, state: State<Arc<RwLock<RepositoryState>>>) -> Result<Option<JSON<Vec<RepositoryFile>>>, LockingError> {
-//    let s = state.read().map_err(|p| LockingError {})?;
-//    let option: Option<&Repository> = s.get_repository(&repository_id.into_inner());
-//    Ok(option.map(|r| JSON(r.get_files())))
-//}
+#[post("/repo/<repo_id>/file", data = "<file>")]
+pub fn create_file(repo_id: UUID, token: AccessToken, file: JSON<File>, state: State<GlobalState>) -> Response {
+    info!("#create_file");
+    let file = file.into_inner();
+    let repo_id = file.repository;
+
+    let (content, header) = file.split_header_content();
+    let header = match header {
+        Ok(h) => h,
+        Err(e) => return Response::build().status(Status::BadRequest).finalize()
+    };
+
+    let c: &CryptoActor = state.crypt();
+    let option = c.create_new_file(&repo_id, &token, header, content.unwrap_or(Vec::new()));
+    let (body, status) = match option {
+        None => ("No result...".to_string(), Status::NotFound),
+        Some(res) => (to_string(&res).unwrap(), Status::Ok),
+    };
+
+    Response::build()
+        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
+        .sized_body(Cursor::new(body))
+        .status(status)
+        .finalize()
+}
+
 //
 //#[delete("/repository/<repository_id>/<file_id>")]
 //pub fn delete_file(repository_id: UUID, file_id: UUID) {}
@@ -270,32 +317,137 @@ mod test {
     use std::sync::{Arc, RwLock};
     use uuid::Uuid;
     use super::dto::*;
-    use serde_json;
-    use rocket::http::ContentType;
+    use serde_json::from_str;
+    use rocket::http::{Header, ContentType};
+    use tempdir::TempDir;
+    use rocket::{Route, Rocket, Response};
+    use state::GlobalState;
+    use crypt::actor::dto::*;
+    use chrono::{DateTime, UTC};
 
-    //    #[test]
-    //    fn test_create_repo() {
-    //        let lock = Arc::new(RwLock::new(RepositoryState::new()));
-    //        let rocket = rocket::ignite()
-    //            .manage(lock.clone())
-    //            .mount("/", routes![super::create_repository]);
-    //
-    //        let create_repo = CreateRepository { password: "bla".as_bytes().to_vec(), encryption: EncryptionType::ChaCha, user_name: "user".to_string(), name: "My Repository".to_string() };
-    //        let json = serde_json::to_string(&create_repo).unwrap();
-    //
-    //        let mut req = MockRequest::new(Post, "/repository").body(json);
-    //        req.add_header(ContentType::JSON);
-    //
-    //        let mut response = req.dispatch_with(&rocket);
-    //        assert_eq!(response.status(), Status::Ok);
-    //
-    //        fixme reimplemt actual method
-    //        let body_string = response.body().and_then(|b| b.into_string()).unwrap();
-    //        let uuid = Uuid::parse_str(body_string.as_str()).unwrap();
-    //
-    //        {
-    //            let state = lock.read().unwrap();
-    //            assert!(state.get_repository(&uuid).is_some());
-    //        }
-    //    }
+    use spectral::prelude::*;
+
+    fn setup() -> (TempDir, Rocket) {
+        let temp = TempDir::new("rest-test").unwrap();
+
+        let state = GlobalState::new(vec![temp.path().to_path_buf()]).unwrap();
+
+        let rocket = rocket::ignite()
+            .manage(state)
+            .mount("/rest/v1", routes![
+                super::list_repositories,
+                super::create_repository,
+                super::open_repository,
+                super::create_file,
+                super::any,
+                ])
+            .mount("/rest/v1", vec![
+                Route::new(Get, "/repo/<id>/?:", super::list_files),
+                Route::new(Get, "/repo/<id>", super::list_files),
+                Route::new(Get, "/repo/<id>/<type>/?:", super::list_files),
+                Route::new(Get, "/repo/<id>/<type>", super::list_files),
+            ]);
+        (temp, rocket)
+    }
+
+    fn body_to_json<T>(response: &mut Response) -> T
+        where T: ::serde::Deserialize {
+        let b = response.body().unwrap();
+        let string = b.into_string().unwrap();
+
+        from_str(&string).unwrap()
+        //        response.body().and_then(|b| from_str(b.into_string().unwrap().as_str()).ok()).unwrap()
+    }
+
+    fn get_ok<T>(path: &str, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize {
+        let mut req = MockRequest::new(Get, path);
+        let mut response = req.dispatch_with(&rocket);
+        assert_eq!(Status::Ok, response.status());
+        body_to_json(&mut response)
+    }
+
+    fn get_from_repo<T>(suffix: &str, repo_id: &Uuid, token: &AccessToken, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize {
+        let mut req = MockRequest::new(Get, format!("/rest/v1/repo/{}{}", repo_id, suffix));
+        req.add_header(Header::new("token", format!("{}", token.id)));
+        let mut response = req.dispatch_with(&rocket);
+        assert_eq!(Status::Ok, response.status());
+        body_to_json(&mut response)
+    }
+
+    fn post_ok<T, B>(path: &str, body: &B, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize,
+              B: ::serde::Serialize
+    {
+        use ::serde_json::to_string;
+        let s = to_string(body).unwrap();
+
+        let mut req = MockRequest::new(Post, path).body(s);
+        req.add_header(ContentType::JSON);
+        let mut response = req.dispatch_with(&rocket);
+        assert_eq!(Status::Ok, response.status());
+        body_to_json(&mut response)
+    }
+
+    fn post_to_repo<T, B>(suffix: &str, repo_id: &Uuid, token: &AccessToken, body: &B, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize,
+              B: ::serde::Serialize
+    {
+        use ::serde_json::to_string;
+        let s = to_string(body).unwrap();
+
+        let mut req = MockRequest::new(Post, format!("/rest/v1/repo/{}{}", repo_id, suffix)).body(s);
+        req.add_header(ContentType::JSON);
+        req.add_header(Header::new("token", format!("{}", token.id)));
+
+        let mut response = req.dispatch_with(&rocket);
+        assert_eq!(Status::Ok, response.status());
+        body_to_json(&mut response)
+    }
+
+    fn create_open_repo() -> (TempDir, Rocket, Uuid, AccessToken) {
+        let (temp, rocket) = setup();
+        let vec: Vec<Repository> = get_ok("/rest/v1/repo", &rocket);
+        assert_that(&vec).is_empty();
+        let cmd = CreateRepository { name: "repo".to_string(), user_name: "none".to_string(), encryption: EncryptionType::ChaCha, password: vec![1, 2, 3] };
+        let response: Option<RepositoryDto> = post_ok("/rest/v1/repo", &cmd, &rocket);
+        let vec: Vec<Repository> = get_ok("/rest/v1/repo", &rocket);
+        assert_that(&vec).has_length(1);
+        let repo_id = &vec[0].id;
+        let cmd = OpenRepository { user_name: String::new(), password: vec![1, 2, 3] };
+        let response: Option<AccessToken> = post_ok(format!("/rest/v1/repo/{}/", repo_id).as_str(), &cmd, &rocket);
+        assert!(response.is_some());
+        (temp, rocket, repo_id.clone(), response.unwrap())
+    }
+
+    #[test]
+    fn good_case_create_open_close() {
+        create_open_repo();
+    }
+
+    #[test]
+    fn good_case_create_file() {
+        let (temp, rocket, repo_id, token) = create_open_repo();
+        let cmd = File {
+            repository: repo_id,
+            id: Uuid::new_v4(),
+            version: 0,
+            name: "test".to_string(),
+
+            created: UTC::now(),
+            updated: UTC::now(),
+            deleted: None,
+
+            details: None,
+            file_type: "DOCUMENT".to_string(),
+            content: Some(vec![1, 2, 3, 4, 5, 6]),
+            tags: vec!["hallo".to_string()],
+        };
+
+        let file: Option<FileDescriptor> = post_to_repo("/file", &repo_id, &token, &cmd, &rocket);
+        assert!(file.is_some());
+
+        let page: Page = get_from_repo("/document/", &repo_id, &token, &rocket);
+    }
 }

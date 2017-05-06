@@ -17,7 +17,7 @@ use uuid::Uuid;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize,Deserialize)]
 pub struct AccessToken {
     pub id: Uuid,
 }
@@ -34,26 +34,26 @@ pub enum PwKdfDto {
     //Argon,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct RepositoryDto {
     pub id: Uuid,
     pub token: AccessToken,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct FileDescriptor {
     pub repo: Uuid,
     pub id: Uuid,
     pub version: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct FileHeaderDescriptor {
     pub descriptor: FileDescriptor,
     pub header: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone,Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct RepositoryDescriptor {
     pub id: Uuid,
     pub name: String,
@@ -87,6 +87,24 @@ impl AccessToken {
 
 impl Display for AccessToken {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "Creating repository {}", self.id.simple())
+        write!(f, "Token {}", self.id.simple())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_eq() {
+        use std::str::FromStr;
+
+        let uuid = Uuid::from_str("1074e93b-e8e7-465e-9fb1-54da4e5c136b").unwrap();
+        let token1 = AccessToken { id: uuid };
+
+        let uuid = Uuid::from_str("1074e93b-e8e7-465e-9fb1-54da4e5c136b").unwrap();
+        let token2 = AccessToken { id: uuid };
+
+        assert_eq!(token1, token2);
     }
 }

@@ -17,7 +17,7 @@ pub use self::error::CryptError;
 use self::actor::communication::*;
 use self::actor::handle;
 use actor::{ActorControl, Actor};
-use self::actor::dto::*;
+pub use self::actor::dto::*;
 
 use std::path::PathBuf;
 use std::thread;

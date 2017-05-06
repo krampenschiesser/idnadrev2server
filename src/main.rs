@@ -79,6 +79,8 @@ fn main() {
                 rest::list_repositories,
                 rest::create_repository,
                 rest::open_repository,
+                rest::create_file,
+                rest::any,
         //        rest::close_repository,
         //        rest::get_file,
         //        rest::delete_file,
@@ -87,8 +89,12 @@ fn main() {
         //        rest::get_file_content,
         //        rest::save_file_content,
                 ])
-        .mount("/rest/v1", vec![Route::new(Get, "/repo/<id>/?:", rest::list_files)])
-        .mount("/rest/v1", vec![Route::new(Get, "/repo/<id>/<type>/?:", rest::list_files_by_type)])
+        .mount("/rest/v1", vec![
+            Route::new(Get, "/repo/<id>/?:", rest::list_files),
+            Route::new(Get, "/repo/<id>", rest::list_files),
+            Route::new(Get, "/repo/<id>/<type>/?:", rest::list_files),
+            Route::new(Get, "/repo/<id>/<type>", rest::list_files),
+        ])
         .mount("/", routes![
             rest::ui::index,
             rest::ui::any,
@@ -100,6 +106,7 @@ fn main() {
         rocket = rocket.mount("/rest/v1", routes![
         rest::cors::open_repo_ping,
         rest::cors::create_repository,
+        rest::cors::create_file,
         ]);
     }
 

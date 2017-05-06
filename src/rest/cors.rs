@@ -45,3 +45,14 @@ pub fn create_repository() -> Response<'static> {
         .status(Status::Ok)
         .finalize()
 }
+
+#[cfg(debug_assertions)]
+#[options("/repo/<repo_id>/file")]
+pub fn create_file(repo_id: UUID) -> Response<'static> {
+    Response::build()
+        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
+        .raw_header("Access-Control-Allow-Methods", "POST")
+        .raw_header("Access-Control-Allow-Headers", "content-type,token")
+        .status(Status::Ok)
+        .finalize()
+}

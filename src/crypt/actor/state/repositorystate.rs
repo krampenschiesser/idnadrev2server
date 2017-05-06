@@ -59,7 +59,11 @@ impl AccessTokenState {
 
     pub fn get_elapsed_minutes(&self) -> u64 {
         let secs = self.last_access.elapsed().as_secs();
-        secs * 60
+        secs / 60
+    }
+
+    pub fn get_elapsed(&self) -> Duration {
+        self.last_access.elapsed()
     }
 }
 
@@ -87,12 +91,17 @@ impl RepositoryState {
     }
 
     pub fn check_token(&mut self, token: &AccessToken) -> bool {
+        let cloned = self.tokens.clone();
         let mut o = self.tokens.get_mut(&token.id);
         match o {
-            None => false,
+            None => {
+                debug!("Token not found {}.", &token.id);
+                false
+            }
             Some(ref mut t) => {
                 let min = t.get_elapsed_minutes();
                 if min > 20 {
+                    debug!("Token timed out: {}", &token.id);
                     false
                 } else {
                     t.touch();
