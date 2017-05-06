@@ -36,12 +36,12 @@ pub enum EncryptionType {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Page {
-    files: Vec<File>,
-    total: Option<u32>,
-    start: u32,
-    offset: u32,
-    next: Option<String>,
-    previous: Option<String>,
+    pub files: Vec<File>,
+    pub total: Option<u32>,
+    pub offset: u32,
+    pub limit: u32,
+    pub next: Option<String>,
+    pub previous: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -137,6 +137,25 @@ impl<'a> ReducedFile<'a> {
 }
 
 impl File {
+    pub fn new(repo: &Uuid, name: &str, file_type: &str, content: Option<Vec<u8>>) -> Self {
+        let now = UTC::now();
+        File {
+            repository: repo.clone(),
+            id: Uuid::new_v4(),
+            version: 0,
+            name: name.to_string(),
+
+            created: now,
+            updated: now,
+            deleted: None,
+
+            file_type: file_type.to_string(),
+            tags: Vec::new(),
+            details: None,
+            content: content
+        }
+    }
+
     pub fn to_json(&self) -> Result<String, ::serde_json::error::Error> {
         use serde_json::to_string;
 
@@ -177,11 +196,11 @@ impl<'a, 'r> ::rocket::request::FromRequest<'a, 'r> for AccessToken {
 impl Page {
     pub fn empty() -> Self {
         Page {
-            offset: 0,
+            limit: 0,
             files: Vec::new(),
             next: None,
             previous: None,
-            start: 0,
+            offset: 0,
             total: None,
         }
     }

@@ -30,6 +30,8 @@ pub enum CryptCmd {
     ListRepositories,
     ListFiles { token: AccessToken, id: Uuid },
 
+    CheckToken { repo: Uuid, token: AccessToken },
+
     FileAdded(PathBuf),
     FileChanged(PathBuf),
     FileDeleted(PathBuf),
@@ -55,7 +57,9 @@ pub enum CryptResponse {
     RepositoryOpenFailed { id: Uuid },
     RepositoryIsClosed { id: Uuid },
     NoSuchRepository { id: Uuid },
-    RepositoryAlreadyExists{ name: String},
+    RepositoryAlreadyExists { name: String },
+
+    TokenValid,
 
     OptimisticLockError { file: FileDescriptor, file_version: u32 },
     NoSuchFile(FileDescriptor),
@@ -75,6 +79,7 @@ impl Display for CryptCmd {
             CryptCmd::CloseRepository { ref id, .. } => write!(f, "Close repository {}", id),
             CryptCmd::ListFiles { ref id, .. } => write!(f, "List files in {}", id),
             CryptCmd::ListRepositories => write!(f, "List repositories"),
+            CryptCmd::CheckToken { ref repo, .. } => write!(f, "Check token for repo {}", repo),
 
             CryptCmd::CreateNewFile { ref header, ref repo, .. } => write!(f, "Create new file with header: {} in repo: {}", header, repo),
             CryptCmd::UpdateHeader { ref file, .. } => write!(f, "Update header of {} version={}", &file.id, &file.version),
@@ -113,6 +118,7 @@ impl Display for CryptResponse {
             CryptResponse::NoSuchRepository { ref id } => write!(f, "CryptResponse::NoSuchRepository: Repositroy does not exist {}", id),
             CryptResponse::RepositoryChanged(ref id) => write!(f, "CryptResponse::RepositoryChanged: Repository {} changed.", id),
 
+            CryptResponse::TokenValid => write!(f, "CryptResponse::TokenValid"),
 
             CryptResponse::OptimisticLockError { ref file, ref file_version } => write!(f, "CryptResponse::OptimisticLockError: File was modified, new_version={} file_version={}, file={}", file_version, &file.version, &file.id),
             CryptResponse::NoSuchFile(ref file) => write!(f, "CryptResponse::NoSuchFile: No file exists {}", file.id),

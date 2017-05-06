@@ -7,8 +7,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crypt::{CryptoActor,CryptError};
+use crypt::{CryptoActor,CryptError,AccessToken};
 use std::path::PathBuf;
+use uuid::Uuid;
 
 pub struct GlobalState {
     crypt_actor: CryptoActor,
@@ -22,5 +23,9 @@ impl GlobalState {
 
     pub fn crypt(&self) -> &CryptoActor {
         &self.crypt_actor
+    }
+
+    pub fn check_token(&self, repo: &Uuid, token: &AccessToken) -> bool {
+        self.crypt_actor.check_token(repo,token)
     }
 }

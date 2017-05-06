@@ -184,6 +184,16 @@ pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> 
             return Outcome::Failure(Status::BadRequest);
         }
     };
+    let repo_id: Uuid = match request.get_param(0) {
+        Ok(param) => {
+            match Uuid::parse_str(param) {
+                Ok(id) => id,
+                Err(e) => return Outcome::Failure(Status::BadRequest)
+            }
+        }
+        Err(e) => return Outcome::Failure(Status::BadRequest),
+    };
+    info!("Repository: {}", repo_id);
 
     let state: State<GlobalState> = match State::from_request(request) {
         Outcome::Success(state) => state,
@@ -192,8 +202,12 @@ pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> 
         }
     };
 
-    let page = list_files_internal(search, &token, state.inner());
-    Outcome::of(JSON(page))
+    if state.check_token(&repo_id, &token) {
+        let page = list_files_internal(search, &token, state.inner());
+        Outcome::of(JSON(page))
+    } else {
+        Outcome::Failure(Status::Unauthorized)
+    }
 }
 
 fn list_files_internal(search: SearchParam, token: &AccessToken, state: &GlobalState) -> Page {
@@ -427,27 +441,43 @@ mod test {
     }
 
     #[test]
-    fn good_case_create_file() {
+    #[should_panic]
+    fn create_file_invalid_token() {
         let (temp, rocket, repo_id, token) = create_open_repo();
-        let cmd = File {
-            repository: repo_id,
-            id: Uuid::new_v4(),
-            version: 0,
-            name: "test".to_string(),
 
-            created: UTC::now(),
-            updated: UTC::now(),
-            deleted: None,
 
-            details: None,
-            file_type: "DOCUMENT".to_string(),
-            content: Some(vec![1, 2, 3, 4, 5, 6]),
-            tags: vec!["hallo".to_string()],
-        };
+        let mut cmd = File::new(&repo_id, "test", "DOCUMENT", Some(vec![1, 2, 3, 4, 5, 6]));
+        cmd.tags = vec!["hallo".to_string()];
+
+        let file: Option<FileDescriptor> = post_to_repo("/file", &repo_id, &token, &cmd, &rocket);
+
+        let other_token = AccessToken::new();
+        let page: Page = get_from_repo("/document/", &repo_id, &other_token, &rocket);
+    }
+
+
+    #[test]
+    fn good_case_create_file_and_list() {
+        let (temp, rocket, repo_id, token) = create_open_repo();
+
+        let mut cmd = File::new(&repo_id, "test", "DOCUMENT", Some(vec![1, 2, 3, 4, 5, 6]));
+        cmd.tags = vec!["hallo".to_string()];
 
         let file: Option<FileDescriptor> = post_to_repo("/file", &repo_id, &token, &cmd, &rocket);
         assert!(file.is_some());
 
         let page: Page = get_from_repo("/document/", &repo_id, &token, &rocket);
+        assert_eq!(Some(1), page.total);
+        assert_eq!(0, page.offset);
+        assert_eq!(1, page.limit);
+        assert_eq!(None, page.previous);
+        assert_eq!(None, page.next);
+
+        assert_eq!(1, page.files.len());
+
+        let ref file = page.files[0];
+        assert_eq!("test", file.name);
+        assert_eq!("DOCUMENT", file.file_type);
+        assert_eq!(None, file.content);
     }
 }

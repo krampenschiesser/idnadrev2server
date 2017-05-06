@@ -64,12 +64,12 @@ impl State {
         self.repositories.insert(id.clone(), repostate);
     }
 
-    pub fn check_token(&mut self, token: &AccessToken, id: &Uuid) -> bool {
-        let o = self.get_repository_mut(id);
+    pub fn check_token(&mut self, token: &AccessToken, repo_id: &Uuid) -> bool {
+        let o = self.get_repository_mut(repo_id);
         match o {
             Some(repo) => repo.check_token(token),
             None => {
-                info!("No repository found for id {}", id);
+                info!("No repository found for id {}", repo_id);
                 false
             }
         }

@@ -33,6 +33,7 @@ pub fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String>
         &CryptCmd::CloseRepository { ref id, ref token } => close_repository(id, token, state),
         &CryptCmd::ListFiles { ref id, ref token } => list_files(id, token, state),
         &CryptCmd::ListRepositories => list_repositories(state),
+        &CryptCmd::CheckToken { ref repo, ref token } => check_token(repo, token, state),
         //file commands
         &CryptCmd::CreateNewFile { ref token, ref header, ref content, ref repo } => create_new_file(token, header, content, repo, state),
         &CryptCmd::UpdateHeader { ref token, ref header, ref file } => update_file(token, file, Some(header), None, state),
@@ -52,7 +53,8 @@ pub fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String>
 }
 
 
-fn open_repository(id: &Uuid, user_name: &String, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {//fixme consider username in token statek
+fn open_repository(id: &Uuid, user_name: &String, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {
+    //fixme consider username in token statek
     let pw = PlainPw::new(pw);
 
     if state.has_repository(id) {
@@ -154,6 +156,14 @@ fn close_repository(id: &Uuid, token: &AccessToken, state: &mut State) -> Result
         Ok(CryptResponse::RepositoryIsClosed { id: id.clone() })
     } else {
         invalid_token("Trying to close a repository", token)
+    }
+}
+
+fn check_token(repo: &Uuid, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
+    if state.check_token(token, repo) {
+        Ok(CryptResponse::TokenValid)
+    } else {
+        Ok(CryptResponse::InvalidToken(format!("Invalid token for repo {}", repo)))
     }
 }
 

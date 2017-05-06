@@ -234,6 +234,20 @@ impl CryptoActor {
             None
         }
     }
+
+    pub fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool {
+        let cmd = CryptCmd::CheckToken { repo: repo_id.clone(), token: token.clone()};
+
+        if let Some(response) = self.send_unwrap(cmd) {
+            match response {
+                CryptResponse::TokenValid => true,
+                _ => false
+
+            }
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
