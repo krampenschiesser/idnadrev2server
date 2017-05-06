@@ -40,7 +40,6 @@ extern crate spectral;
 
 mod crypt;
 pub mod rest;
-mod repository;
 mod state;
 //mod dummy;
 mod actor;
@@ -50,7 +49,6 @@ use std::sync::mpsc::{channel};
 use std::path::{PathBuf, Path};
 use rocket::config::{self, ConfigError};
 use std::thread;
-use repository::service::{RepositoryService, Cmd, Response};
 use rest::dto::*;
 use rocket::http::Method::*;
 use rocket::{Route};
