@@ -12,11 +12,13 @@ rocket_contrib = {version = "0.2.6", default-features=true, features=["uuid"]}
 #serde_json = "1.0.0"
 #serde_derive = "1.0.0"
 serde = "0.9"
+rayon = "0.7.0"
 serde_json = "0.9"
 serde_derive = "0.9"
 base64 = "~0.4.0"
-ring = "0.7.5"
-ring-pwhash = "0.1.2"
+ring = "0.7.6"
+ring-pwhash = {git = "https://github.com/krampenschiesser/ring-pwhash.git"}
+#ring-pwhash = "0.1.2"
 rand = "0.3.15"
 byteorder = { version = "1", features =["std"]}
 uuid = { version= "0.4.0", features = ["v4", "serde"]}
