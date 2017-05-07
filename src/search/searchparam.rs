@@ -10,7 +10,7 @@
 use chrono::{DateTime, UTC};
 use serde_json::Value;
 use std::fmt::Debug;
-use super::search::{filter_text, filter_date};
+use super::filter::{filter_text, filter_date};
 
 pub trait SearchFilter: Debug {
     fn test(&self, value: &Value) -> bool;
@@ -25,7 +25,7 @@ pub struct SearchParam {
 
     pub any: Option<String>,
 
-    pub title: Option<String>,
+    pub name: Option<String>,
     pub file_type: Option<String>,
     pub tags: Vec<String>,
 
@@ -152,8 +152,8 @@ impl QueryParam {
     pub fn is_any(&self) -> bool {
         self.key == "any"
     }
-    pub fn is_title(&self) -> bool {
-        self.key == "title"
+    pub fn is_name(&self) -> bool {
+        self.key == "name"
     }
     pub fn is_type(&self) -> bool {
         self.key == "type"
@@ -299,7 +299,7 @@ impl DateFilter {
 
 impl SearchParam {
     pub fn new() -> Self {
-        SearchParam { offset: 0, limit: 25, any: None, title: None, file_type: None, tags: Vec::new(), created: None, updated: None, deleted: None, text_filters: Vec::new(), date_filters: Vec::new() }
+        SearchParam { offset: 0, limit: 25, any: None, name: None, file_type: None, tags: Vec::new(), created: None, updated: None, deleted: None, text_filters: Vec::new(), date_filters: Vec::new() }
     }
 
     fn parse_str(param: &str) -> Result<Vec<QueryParam>, QueryParamError> {
@@ -330,8 +330,8 @@ impl SearchParam {
                 retval.limit = param.get_u32_value()?;
             } else if param.is_any() {
                 retval.any = Some(param.value);
-            } else if param.is_title() {
-                retval.title = Some(param.value);
+            } else if param.is_name() {
+                retval.name = Some(param.value);
             } else if param.is_type() {
                 retval.file_type = Some(param.value);
             } else if param.is_tags() {
@@ -445,8 +445,8 @@ mod tests {
 
     #[test]
     fn title() {
-        let search = SearchParam::from_query_param("?title=title").unwrap();
-        assert_eq!("title", search.title.unwrap());
+        let search = SearchParam::from_query_param("?name=title").unwrap();
+        assert_eq!("title", search.name.unwrap());
     }
 
     #[test]

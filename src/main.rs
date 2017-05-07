@@ -33,11 +33,12 @@ extern crate log;
 extern crate log4rs;
 extern crate distance;
 extern crate thread_local;
+extern crate rayon;
 
 #[cfg(test)]
 extern crate spectral;
 
-
+mod search;
 mod crypt;
 pub mod rest;
 mod state;

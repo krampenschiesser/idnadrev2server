@@ -16,15 +16,45 @@ use self::actor::state::State;
 pub use self::error::CryptError;
 use self::actor::communication::*;
 use self::actor::handle;
-use actor::{ActorControl, Actor};
+use actor::{ActorControl, Actor, SenderWrapper,SendSync};
 pub use self::actor::dto::*;
 
 use std::path::PathBuf;
 use std::thread;
 use uuid::Uuid;
+use std::sync::mpsc::Sender;
 
 pub struct CryptoActor {
     actor_control: ActorControl<CryptCmd, CryptResponse>,
+}
+
+pub struct CryptoSender {
+    sender: SenderWrapper<CryptCmd, CryptResponse>,
+}
+pub trait CryptoIfc {
+    fn list_repositories(&self) -> Option<Vec<RepositoryDescriptor>>;
+
+    fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken>;
+
+    fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncTypeDto) -> Option<RepositoryDto>;
+
+    fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid>;
+
+    fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>>;
+
+    fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor>;
+
+    fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor>;
+
+    fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)>;
+
+    fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor>;
+
+    fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor>;
+
+    fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor>;
+
+    fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool;
 }
 
 impl CryptoActor {
@@ -37,216 +67,319 @@ impl CryptoActor {
 
         Ok(CryptoActor { actor_control: control })
     }
+
+    pub fn create_sender(&self) -> CryptoSender {
+        CryptoSender { sender: self.actor_control.clone_sender() }
+    }
 }
 
-impl CryptoActor {
-    fn send_unwrap(&self, cmd: CryptCmd) -> Option<CryptResponse> {
-        let response = self.actor_control.send_sync(cmd.clone());
+impl CryptoIfc for CryptoSender {
+    fn list_repositories(&self) -> Option<Vec<RepositoryDescriptor>> {
+        list_repositories(&self.sender)
+    }
+
+    fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
+        open_repository(&self.sender, id, user_name, pw)
+    }
+
+    fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncTypeDto) -> Option<RepositoryDto> {
+        create_repository(&self.sender, name, pw, enc_type)
+    }
+
+    fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
+        close_repository(&self.sender, id, token)
+    }
+
+    fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
+        list_repository_files(&self.sender, id, token)
+    }
+
+    fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
+        create_new_file(&self.sender, repo_id, token, header, content)
+    }
+
+    fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
+        get_file_header(&self.sender, repo_id, token, file_id)
+    }
+
+    fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
+        get_file(&self.sender, repo_id, token, file_id)
+    }
+
+    fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+        update_header(&self.sender, repo_id, token, file_id, file_version, header)
+    }
+
+    fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+        update_file(&self.sender, repo_id, token, file_id, file_version, header, content)
+    }
+
+    fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+        delete_file(&self.sender,repo_id,token,file_id,file_version)
+    }
+
+    fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool {
+        check_token(&self.sender,repo_id,token)
+    }
+}
+impl CryptoIfc for CryptoActor {
+    fn list_repositories(&self) -> Option<Vec<RepositoryDescriptor>> {
+        list_repositories(&self.actor_control)
+    }
+
+    fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
+        open_repository(&self.actor_control, id, user_name, pw)
+    }
+
+    fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncTypeDto) -> Option<RepositoryDto> {
+        create_repository(&self.actor_control, name, pw, enc_type)
+    }
+
+    fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
+        close_repository(&self.actor_control, id, token)
+    }
+
+    fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
+        list_repository_files(&self.actor_control, id, token)
+    }
+
+    fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
+        create_new_file(&self.actor_control, repo_id, token, header, content)
+    }
+
+    fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
+        get_file_header(&self.actor_control, repo_id, token, file_id)
+    }
+
+    fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
+        get_file(&self.actor_control, repo_id, token, file_id)
+    }
+
+    fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+        update_header(&self.actor_control, repo_id, token, file_id, file_version, header)
+    }
+
+    fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+        update_file(&self.actor_control, repo_id, token, file_id, file_version, header, content)
+    }
+
+    fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+        delete_file(&self.actor_control,repo_id,token,file_id,file_version)
+    }
+
+    fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool {
+        check_token(&self.actor_control,repo_id,token)
+    }
+}
+
+
+fn send_unwrap<T: SendSync<CryptCmd,CryptResponse>>(send: &T, cmd: CryptCmd) -> Option<CryptResponse> {
+    let response = send.send_sync(cmd.clone());
+    match response {
+        Err(msg) => {
+            error!("Got error from cryptactor: {}", msg);
+            None
+        }
+        Ok(o) => {
+            Some(o)
+        }
+    }
+}
+
+ fn list_repositories<T: SendSync<CryptCmd,CryptResponse>>(send: &T) -> Option<Vec<RepositoryDescriptor>> {
+    let cmd = CryptCmd::ListRepositories;
+
+    if let Some(response) = send_unwrap(send, cmd) {
         match response {
-            Err(msg) => {
-                error!("Got error from cryptactor: {}", msg);
+            CryptResponse::Repositories(vec) => Some(vec),
+            o => {
+                error!("Could not list repositories: {}", o);
                 None
             }
-            Ok(o) => {
-                Some(o)
-            }
         }
+    } else {
+        None
     }
+}
 
-    pub fn list_repositories(&self) -> Option<Vec<RepositoryDescriptor>> {
-        let cmd = CryptCmd::ListRepositories;
+ fn open_repository<T: SendSync<CryptCmd,CryptResponse>>(send: &T, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
+    let cmd = CryptCmd::OpenRepository { id: id.clone(), user_name: user_name, pw: pw };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::Repositories(vec) => Some(vec),
-                o => {
-                    error!("Could not list repositories: {}", o);
-                    None
-                }
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::RepositoryOpened { token, id } => Some(token),
+            o => {
+                error!("Got wrong response while opening repository {}: {}", id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
-        let cmd = CryptCmd::OpenRepository { id: id.clone(), user_name: user_name, pw: pw };
+ fn create_repository<T: SendSync<CryptCmd,CryptResponse>>(send: &T, name: &str, pw: Vec<u8>, enc_type: EncTypeDto) -> Option<RepositoryDto> {
+    #[cfg(debug_assertions)]
+    let scrypt = PwKdfDto::SCrypt { iterations: 4, memory_costs: 4, parallelism: 1 };
+    #[cfg(not(debug_assertions))]
+    let scrypt = PwKdfDto::SCrypt { iterations: 16, memory_costs: 8, parallelism: 1 };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::RepositoryOpened { token, id } => Some(token),
-                o => {
-                    error!("Got wrong response while opening repository {}: {}", id, o);
-                    None
-                }
+    let cmd = CryptCmd::CreateRepository { name: name.to_string(), pw: pw, folder_id: None, encryption: EncTypeDto::ChaCha, kdf: scrypt };
+
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::RepositoryCreated { token, id } => Some(RepositoryDto { token: token, id: id }),
+            o => {
+                error!("Got wrong response while creating repository {}: {}", name, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncTypeDto) -> Option<RepositoryDto> {
-        #[cfg(debug_assertions)]
-        let scrypt = PwKdfDto::SCrypt { iterations: 4, memory_costs: 4, parallelism: 1 };
-        #[cfg(not(debug_assertions))]
-        let scrypt = PwKdfDto::SCrypt { iterations: 16, memory_costs: 8, parallelism: 1 };
+ fn close_repository<T: SendSync<CryptCmd,CryptResponse>>(send: &T, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
+    let cmd = CryptCmd::CloseRepository { id: id.clone(), token: token.clone() };
 
-        let cmd = CryptCmd::CreateRepository { name: name.to_string(), pw: pw, folder_id: None, encryption: EncTypeDto::ChaCha, kdf: scrypt };
-
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::RepositoryCreated { token, id } => Some(RepositoryDto { token: token, id: id }),
-                o => {
-                    error!("Got wrong response while creating repository {}: {}", name, o);
-                    None
-                }
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::RepositoryIsClosed { id } => Some(id),
+            o => {
+                error!("Got wrong response while closing repository {}: {}", id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
-        let cmd = CryptCmd::CloseRepository { id: id.clone(), token: token.clone() };
+ fn list_repository_files<T: SendSync<CryptCmd,CryptResponse>>(send: &T, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
+    let cmd = CryptCmd::ListFiles { id: id.clone(), token: token.clone() };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::RepositoryIsClosed { id } => Some(id),
-                o => {
-                    error!("Got wrong response while closing repository {}: {}", id, o);
-                    None
-                }
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::Files(vec) => Some(vec),
+            o => {
+                error!("Got wrong response while listing repository files {}: {}", id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
-        let cmd = CryptCmd::ListFiles { id: id.clone(), token: token.clone() };
+ fn create_new_file<T: SendSync<CryptCmd,CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
+    let cmd = CryptCmd::CreateNewFile { token: token.clone(), header: header, repo: repo_id.clone(), content: content };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::Files(vec) => Some(vec),
-                o => {
-                    error!("Got wrong response while listing repository files {}: {}", id, o);
-                    None
-                }
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::FileCreated(descriptor) => Some(descriptor),
+            o => {
+                error!("Got wrong response while trying to create a new file in {}: {}", repo_id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
-    pub fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
-        let cmd = CryptCmd::CreateNewFile { token: token.clone(), header: header, repo: repo_id.clone(), content: content };
+}
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::FileCreated(descriptor) => Some(descriptor),
-                o => {
-                    error!("Got wrong response while trying to create a new file in {}: {}", repo_id, o);
-                    None
-                }
+ fn get_file_header<T: SendSync<CryptCmd,CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
+    let cmd = CryptCmd::GetFileHeader { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
+
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::File(descriptor) => Some(descriptor),
+            o => {
+                error!("Got wrong response while trying to get file header {}: {}", file_id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
-    pub fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
-        let cmd = CryptCmd::GetFileHeader { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
+}
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::File(descriptor) => Some(descriptor),
-                o => {
-                    error!("Got wrong response while trying to get file header {}: {}", file_id, o);
-                    None
-                }
+ fn get_file<T: SendSync<CryptCmd,CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
+    let cmd = CryptCmd::GetFile { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
+
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::FileContent(descriptor, content) => Some((descriptor, content)),
+            o => {
+                error!("Got wrong response while trying to get file {}: {}", file_id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
-        let cmd = CryptCmd::GetFile { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
+ fn update_header<T: SendSync<CryptCmd,CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+    let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
+    let cmd = CryptCmd::UpdateHeader { token: token.clone(), file: desc, header: header.to_string() };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::FileContent(descriptor, content) => Some((descriptor, content)),
-                o => {
-                    error!("Got wrong response while trying to get file {}: {}", file_id, o);
-                    None
-                }
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::File(descriptor) => Some(descriptor),
+            o => {
+                error!("Got wrong response while trying to update file header {}: {}", file_id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
-        let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
-        let cmd = CryptCmd::UpdateHeader { token: token.clone(), file: desc, header: header.to_string() };
+ fn update_file<T: SendSync<CryptCmd,CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+    let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
+    let cmd = CryptCmd::UpdateFile { token: token.clone(), file: desc, header: header.to_string(), content: content };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::File(descriptor) => Some(descriptor),
-                o => {
-                    error!("Got wrong response while trying to update file header {}: {}", file_id, o);
-                    None
-                }
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::File(descriptor) => Some(descriptor),
+            o => {
+                error!("Got wrong response while trying to update file {}: {}", file_id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
-        let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
-        let cmd = CryptCmd::UpdateFile { token: token.clone(), file: desc, header: header.to_string(), content: content };
+ fn delete_file<T: SendSync<CryptCmd,CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+    let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
+    let cmd = CryptCmd::DeleteFile { token: token.clone(), file: desc };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::File(descriptor) => Some(descriptor),
-                o => {
-                    error!("Got wrong response while trying to update file {}: {}", file_id, o);
-                    None
-                }
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::FileDeleted(descriptor) => Some(descriptor),
+            o => {
+                error!("Got wrong response while trying to delete file {}: {}", file_id, o);
+                None
             }
-        } else {
-            None
         }
+    } else {
+        None
     }
+}
 
-    pub fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
-        let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
-        let cmd = CryptCmd::DeleteFile { token: token.clone(), file: desc };
+fn check_token<T: SendSync<CryptCmd,CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken) -> bool {
+    let cmd = CryptCmd::CheckToken { repo: repo_id.clone(), token: token.clone() };
 
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::FileDeleted(descriptor) => Some(descriptor),
-                o => {
-                    error!("Got wrong response while trying to delete file {}: {}", file_id, o);
-                    None
-                }
-            }
-        } else {
-            None
+    if let Some(response) = send_unwrap(send, cmd) {
+        match response {
+            CryptResponse::TokenValid => true,
+            _ => false
         }
-    }
-
-    pub fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool {
-        let cmd = CryptCmd::CheckToken { repo: repo_id.clone(), token: token.clone()};
-
-        if let Some(response) = self.send_unwrap(cmd) {
-            match response {
-                CryptResponse::TokenValid => true,
-                _ => false
-
-            }
-        } else {
-            false
-        }
+    } else {
+        false
     }
 }
 

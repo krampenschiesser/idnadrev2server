@@ -19,6 +19,7 @@ use chrono::{DateTime, UTC};
 use std::fmt::Display;
 use std::fmt;
 use serde_json;
+use crypt::FileHeaderDescriptor;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -57,10 +58,6 @@ pub struct CreateRepository {
     pub user_name: String,
 }
 
-///
-/// Struct to
-///
-///
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenRepository {
@@ -106,37 +103,67 @@ impl Display for File {
     }
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize,Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-struct ReducedFile<'a> {
-    pub name: &'a String,
+struct ReducedFile {
+    pub name: String,
 
-    pub created: &'a DateTime<UTC>,
-    pub updated: &'a DateTime<UTC>,
-    pub deleted: &'a Option<DateTime<UTC>>,
+    pub created: DateTime<UTC>,
+    pub updated: DateTime<UTC>,
+    pub deleted: Option<DateTime<UTC>>,
 
-    pub file_type: &'a String,
-    pub tags: &'a Vec<String>,
-    pub details: &'a Option<serde_json::Value>,
+    pub file_type: String,
+    pub tags:  Vec<String>,
+    pub details: Option<serde_json::Value>,
 }
 
-impl<'a> ReducedFile<'a> {
-    pub fn new(file: &'a File) -> Self {
+impl ReducedFile {
+    pub fn new(file: &File) -> Self {
         ReducedFile {
-            name: &file.name,
+            name: file.name.clone(),
 
-            created: &file.created,
-            updated: &file.updated,
-            deleted: &file.deleted,
+            created: file.created,
+            updated: file.updated,
+            deleted: file.deleted,
 
-            file_type: &file.file_type,
-            tags: &file.tags,
-            details: &file.details,
+            file_type: file.file_type.clone(),
+            tags: file.tags.clone(),
+            details: file.details.clone(),
         }
+    }
+
+    pub fn from_descriptor(desc: &FileHeaderDescriptor) -> Result<Self,String>{
+        use serde_json::from_str;
+
+        let file = match from_str(desc.header.as_str()) {
+            Ok(obj) => obj,
+            Err(e) => return Err(format!("{}",e))
+        };
+        Ok(file)
     }
 }
 
 impl File {
+    pub fn from_descriptor(desc: &FileHeaderDescriptor) -> Result<Self,String>{
+        let reduced = ReducedFile::from_descriptor(desc)?;
+        let f = File {
+            repository: desc.descriptor.repo,
+            id: desc.descriptor.id,
+            version: desc.descriptor.version,
+            name: reduced.name,
+
+            created: reduced.created,
+            updated: reduced.updated,
+            deleted: reduced.deleted,
+
+            file_type: reduced.file_type,
+            tags: reduced.tags,
+            details: reduced.details,
+            content: None
+        };
+        Ok(f)
+    }
+
     pub fn new(repo: &Uuid, name: &str, file_type: &str, content: Option<Vec<u8>>) -> Self {
         let now = UTC::now();
         File {

@@ -15,9 +15,13 @@ use std::clone::Clone;
 use std::error::Error;
 use std::fmt::Debug;
 
-pub struct ActorControl<Command: Send, Response: Send> {
+pub struct SenderWrapper<Command: Send, Response: Send> {
     sender_share: Mutex<Sender<(Sender<Result<Response, String>>, Command)>>,
     sender_local: ThreadLocal<Sender<(Sender<Result<Response, String>>, Command)>>,
+}
+
+pub struct ActorControl<Command: Send, Response: Send> {
+    sender_wrapper: SenderWrapper<Command, Response>,
     shutdown_command: Command,
 }
 
@@ -30,18 +34,20 @@ pub struct Actor<Command, Response, State> {
     sender: Sender<(Sender<Result<Response, String>>, Command)>,
 }
 
-impl<Command, Response> ActorControl<Command, Response>
+pub trait SendSync<Command,Response>
     where
         Command: Clone + Eq + Debug + PartialEq + Send,
         Response: Clone + Eq + Debug + PartialEq + Send,
 {
-    pub fn stop(&self) {
-        let (s1, r1) = channel();
-        self.get_sender().send((s1, self.shutdown_command.clone()));
-        r1.recv();//wait for shutdown
-    }
+    fn send_sync(&self, cmd: Command) -> Result<Response, String>;
+}
 
-    pub fn send_sync(&self, cmd: Command) -> Result<Response, String> {
+impl<Command, Response>  SendSync<Command, Response> for ActorControl<Command, Response>
+    where
+        Command: Clone + Eq + Debug + PartialEq + Send,
+        Response: Clone + Eq + Debug + PartialEq + Send,
+{
+    fn send_sync(&self, cmd: Command) -> Result<Response, String> {
         let (s2, r2) = channel();
         self.get_sender().send((s2, cmd));
 
@@ -57,12 +63,71 @@ impl<Command, Response> ActorControl<Command, Response>
             }
         }
     }
+}
+impl<Command, Response>  SendSync<Command, Response> for SenderWrapper<Command, Response>
+    where
+        Command: Clone + Eq + Debug + PartialEq + Send,
+        Response: Clone + Eq + Debug + PartialEq + Send,
+{
+    fn send_sync(&self, cmd: Command) -> Result<Response, String> {
+        let (s2, r2) = channel();
+        self.get_sender().send((s2, cmd));
+
+        let result = r2.recv();
+        let result = result.map_err(|e| e.description().to_string());
+        match result {
+            Err(string) => Err(string),
+            Ok(result) => {
+                match result {
+                    Err(string) => Err(string),
+                    Ok(response) => Ok(response)
+                }
+            }
+        }
+    }
+}
+
+impl<Command, Response> ActorControl<Command, Response>
+    where
+        Command: Clone + Eq + Debug + PartialEq + Send,
+        Response: Clone + Eq + Debug + PartialEq + Send,
+{
+    pub fn stop(&self) {
+        let (s1, r1) = channel();
+        self.get_sender().send((s1, self.shutdown_command.clone()));
+        r1.recv();//wait for shutdown
+    }
+
 
     fn get_sender(&self) -> &Sender<(Sender<Result<Response, String>>, Command)> {
+        self.sender_wrapper.get_sender()
+    }
+
+    pub fn clone_sender(&self) -> SenderWrapper<Command,Response> {
+        self.sender_wrapper.clone()
+    }
+}
+
+impl<Command, Response> SenderWrapper<Command, Response>
+    where Command: Clone + Eq + Debug + Send,
+          Response: Clone + Eq + Debug + Send
+{
+    pub fn get_sender(&self) -> &Sender<(Sender<Result<Response, String>>, Command)> {
         self.sender_local.get_or(|| {
-            let sender= self.sender_share.lock().unwrap();
+            let sender = self.sender_share.lock().unwrap();
             Box::new(sender.clone())
         })
+    }
+}
+
+impl<Command, Response>  Clone for SenderWrapper<Command, Response>
+    where Command: Clone + Eq + Debug + Send,
+          Response: Clone + Eq + Debug + Send
+{
+    fn clone(&self) -> Self {
+        let lock = self.sender_share.lock().unwrap();
+        let sender = lock.clone();
+        SenderWrapper{sender_share: Mutex::new(sender),sender_local: ThreadLocal::new()}
     }
 }
 
@@ -74,7 +139,7 @@ impl<Command, Response, State> Actor<Command, Response, State>
     pub fn start(state: State, handler: fn(Command, &mut State) -> Result<Response, String>, shutdown_command: Command) -> (Actor<Command, Response, State>, ActorControl<Command, Response>) {
         let (sender, receiver) = channel();
         let actor = Actor { shutdown_command: shutdown_command.clone(), handler: handler, sender: sender.clone(), receiver: receiver, state: state };
-        let actor_control = ActorControl { shutdown_command: shutdown_command, sender_share: Mutex::new(sender), sender_local: ThreadLocal::new() };
+        let actor_control = ActorControl { shutdown_command: shutdown_command, sender_wrapper: SenderWrapper { sender_share: Mutex::new(sender), sender_local: ThreadLocal::new() } };
         (actor, actor_control)
     }
 

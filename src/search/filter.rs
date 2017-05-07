@@ -15,7 +15,7 @@
 //!
 //! use rayon
 
-use super::searchparam::{TextFilter, FilterOperator, DateFilter};
+use super::searchparam::{TextFilter, FilterOperator, DateFilter,SearchFilter};
 use serde_json::Value;
 use distance::sift3;
 use chrono::{TimeZone, DateTime, UTC, Duration};
@@ -63,6 +63,10 @@ pub fn fuzzy_search(needle: &str, haystack: &str) -> f32 {
     max
 }
 
+pub fn fuzzy_contains(needle: &str, haystack: &str) -> bool {
+    fuzzy_search(needle, haystack) < MAX_SIFT_DISTANCE
+}
+
 pub fn filter_text(filter: &TextFilter, value: &Value) -> bool {
     let o = find_string(filter.field.as_str(), value);
     if let Some(value) = o {
@@ -100,7 +104,7 @@ pub fn filter_date(filter: &DateFilter, value: &Value) -> bool {
                     FilterOperator::LessThan => return time_in_json < filter.datetime.unwrap(),
                     FilterOperator::Empty => return false,
                     FilterOperator::NotEmpty => return true,
-                    _ => ()
+                    _ => unreachable!()
                 }
             }
         }
@@ -108,12 +112,26 @@ pub fn filter_date(filter: &DateFilter, value: &Value) -> bool {
     filter.operator == FilterOperator::Empty
 }
 
+pub fn filter_date_time(filter: &DateFilter, time: &DateTime<UTC>) -> bool{
+    match filter.operator {
+        FilterOperator::Equal => return &filter.datetime.unwrap() == time,
+        FilterOperator::NotEqual => return &filter.datetime.unwrap() != time,
+        FilterOperator::GreaterEquals => return time >= &filter.datetime.unwrap(),
+        FilterOperator::GreaterThan => return time>&filter.datetime.unwrap(),
+        FilterOperator::LessEquals => return time <= &filter.datetime.unwrap(),
+        FilterOperator::LessThan => return time < &filter.datetime.unwrap(),
+        FilterOperator::Empty => return false,
+        FilterOperator::NotEmpty => return true,
+        _ => unreachable!()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use spectral::prelude::*;
-    use rest::searchparam::SearchFilter;
+    use super::super::searchparam::SearchFilter;
 
     fn get_task() -> Value {
         json!({

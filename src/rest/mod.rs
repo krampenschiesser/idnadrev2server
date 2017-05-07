@@ -72,8 +72,8 @@
 //!
 //! This searches for text in all fields.
 //!
-//! 1. It searches in the tags of a file
-//! 2. It searches in the name of a file
+//! 1. It searches in the name of a file
+//! 2. It searches in the tags of a file
 //! 3. Now if not enough results were found it will search in the content of the file for matches
 //!
 //! So files with the text in the name will be returned first by paging, then files with text as a tag.
@@ -127,6 +127,7 @@ use std::io::Cursor;
 use std::sync::{RwLock, Arc};
 use self::dto::{CreateRepository, File};
 use uuid::Uuid;
+use crypt::CryptoIfc;
 
 
 #[cfg(debug_assertions)]
@@ -134,14 +135,12 @@ pub mod cors;
 
 pub mod ui;
 pub mod dto;
-mod searchparam;
-mod search;
 
+use search::SearchParam;
 use rocket::{Route, Data, Outcome, Request, Response};
 use rocket::response::Body;
 use rocket::handler;
 use rocket::http::{Header, Status, Method};
-use self::searchparam::SearchParam;
 use self::dto::{Page, OpenRepository};
 use state::GlobalState;
 use crypt::CryptoActor;
@@ -203,15 +202,15 @@ pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> 
     };
 
     if state.check_token(&repo_id, &token) {
-        let page = list_files_internal(search, &token, state.inner());
+        let page = list_files_internal(search, &repo_id, &token, state.inner());
         Outcome::of(JSON(page))
     } else {
         Outcome::Failure(Status::Unauthorized)
     }
 }
 
-fn list_files_internal(search: SearchParam, token: &AccessToken, state: &GlobalState) -> Page {
-    Page::empty()
+fn list_files_internal(search: SearchParam, repo_id: &Uuid, token: &AccessToken, state: &GlobalState) -> Page {
+    state.search_cache().search(search,repo_id,token)
 }
 
 #[get("/repo")]

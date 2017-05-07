@@ -7,25 +7,33 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crypt::{CryptoActor,CryptError,AccessToken};
+use crypt::{CryptoActor, CryptoSender, CryptError, AccessToken};
 use std::path::PathBuf;
 use uuid::Uuid;
+use search::SearchCache;
+use crypt::CryptoIfc;
 
 pub struct GlobalState {
     crypt_actor: CryptoActor,
+    search_cache: SearchCache,
 }
 
 impl GlobalState {
-    pub fn new(folders: Vec<PathBuf>) -> Result<Self,CryptError> {
+    pub fn new(folders: Vec<PathBuf>) -> Result<Self, CryptError> {
         let crypt = CryptoActor::new(folders)?;
-        Ok(GlobalState { crypt_actor: crypt })
+        let sender = crypt.create_sender();
+        //        let cache = SearchCache::new(&crypt);
+        Ok(GlobalState { crypt_actor: crypt, search_cache: SearchCache { crypt_sender: sender } })
     }
 
     pub fn crypt(&self) -> &CryptoActor {
         &self.crypt_actor
     }
+    pub fn search_cache(&self) -> &SearchCache{
+        &self.search_cache
+    }
 
     pub fn check_token(&self, repo: &Uuid, token: &AccessToken) -> bool {
-        self.crypt_actor.check_token(repo,token)
+        self.crypt_actor.check_token(repo, token)
     }
 }
