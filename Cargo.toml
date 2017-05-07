@@ -16,7 +16,7 @@ rayon = "0.7.0"
 serde_json = "0.9"
 serde_derive = "0.9"
 base64 = "~0.4.0"
-ring = "0.7.6"
+ring = "0.8.1"
 ring-pwhash = {git = "https://github.com/krampenschiesser/ring-pwhash.git"}
 #ring-pwhash = "0.1.2"
 rand = "0.3.15"
