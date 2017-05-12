@@ -34,6 +34,7 @@ extern crate log4rs;
 extern crate distance;
 extern crate thread_local;
 extern crate rayon;
+extern crate sha1;
 
 #[cfg(test)]
 extern crate spectral;
@@ -96,6 +97,10 @@ fn main() {
         ])
         .mount("/", routes![
             rest::ui::index,
+            rest::ui::manifest,
+            rest::ui::asset_mainfest,
+            rest::ui::index_html,
+            rest::ui::favicon,
             rest::ui::any,
             rest::ui::files,
             ]);

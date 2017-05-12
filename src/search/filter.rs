@@ -15,7 +15,7 @@
 //!
 //! use rayon
 
-use super::searchparam::{TextFilter, FilterOperator, DateFilter,SearchFilter};
+use super::searchparam::{TextFilter, FilterOperator, DateFilter, SearchFilter};
 use serde_json::Value;
 use distance::sift3;
 use chrono::{TimeZone, DateTime, UTC, Duration};
@@ -70,20 +70,24 @@ pub fn fuzzy_contains(needle: &str, haystack: &str) -> bool {
 pub fn filter_text(filter: &TextFilter, value: &Value) -> bool {
     let o = find_string(filter.field.as_str(), value);
     if let Some(value) = o {
-        let value = value.to_lowercase();
-        let expected = filter.text.clone().unwrap_or(String::new()).to_lowercase();
-        match filter.operator {
-            FilterOperator::Equal => return expected == value,
-            FilterOperator::NotEqual => return expected != value,
-            FilterOperator::FuzzyContains => return fuzzy_search(expected.as_str(), value.as_str()) < MAX_SIFT_DISTANCE,
-            FilterOperator::Contains => return value.contains(expected.as_str()),
-            FilterOperator::NotContains => return !value.contains(expected.as_str()),
-            FilterOperator::Empty => return false,
-            FilterOperator::NotEmpty => return true,
-            _ => ()
-        }
+        return filter_text_str(filter, value.as_str());
     }
     filter.operator == FilterOperator::Empty
+}
+
+fn filter_text_str(filter: &TextFilter, value: &str) -> bool {
+    let value = value.to_lowercase();
+    let expected = filter.text.clone().unwrap_or(String::new()).to_lowercase();
+    match filter.operator {
+        FilterOperator::Equal => return expected == value,
+        FilterOperator::NotEqual => return expected != value,
+        FilterOperator::FuzzyContains => return fuzzy_search(expected.as_str(), value.as_str()) < MAX_SIFT_DISTANCE,
+        FilterOperator::Contains => return value.contains(expected.as_str()),
+        FilterOperator::NotContains => return !value.contains(expected.as_str()),
+        FilterOperator::Empty => return false,
+        FilterOperator::NotEmpty => return true,
+        _ => unreachable!()
+    }
 }
 
 pub fn filter_date(filter: &DateFilter, value: &Value) -> bool {
@@ -99,7 +103,7 @@ pub fn filter_date(filter: &DateFilter, value: &Value) -> bool {
                     FilterOperator::Equal => return filter.datetime.unwrap() == time_in_json,
                     FilterOperator::NotEqual => return filter.datetime.unwrap() != time_in_json,
                     FilterOperator::GreaterEquals => return time_in_json >= filter.datetime.unwrap(),
-                    FilterOperator::GreaterThan => return time_in_json>filter.datetime.unwrap(),
+                    FilterOperator::GreaterThan => return time_in_json > filter.datetime.unwrap(),
                     FilterOperator::LessEquals => return time_in_json <= filter.datetime.unwrap(),
                     FilterOperator::LessThan => return time_in_json < filter.datetime.unwrap(),
                     FilterOperator::Empty => return false,
@@ -112,12 +116,12 @@ pub fn filter_date(filter: &DateFilter, value: &Value) -> bool {
     filter.operator == FilterOperator::Empty
 }
 
-pub fn filter_date_time(filter: &DateFilter, time: &DateTime<UTC>) -> bool{
+pub fn filter_date_time(filter: &DateFilter, time: &DateTime<UTC>) -> bool {
     match filter.operator {
         FilterOperator::Equal => return &filter.datetime.unwrap() == time,
         FilterOperator::NotEqual => return &filter.datetime.unwrap() != time,
         FilterOperator::GreaterEquals => return time >= &filter.datetime.unwrap(),
-        FilterOperator::GreaterThan => return time>&filter.datetime.unwrap(),
+        FilterOperator::GreaterThan => return time > &filter.datetime.unwrap(),
         FilterOperator::LessEquals => return time <= &filter.datetime.unwrap(),
         FilterOperator::LessThan => return time < &filter.datetime.unwrap(),
         FilterOperator::Empty => return false,

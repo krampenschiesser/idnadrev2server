@@ -30,6 +30,7 @@ log4rs = "0.6.3"
 distance = "0.4"
 needle = "0.1.1"
 thread_local = "0.3.3"
+sha1 = "0.2.0"
 
 [dev-dependencies]
 rocket = { version = "0.2.6", features = ["testing"] }

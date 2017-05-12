@@ -210,7 +210,7 @@ pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> 
 }
 
 fn list_files_internal(search: SearchParam, repo_id: &Uuid, token: &AccessToken, state: &GlobalState) -> Page {
-    state.search_cache().search(search,repo_id,token)
+    state.search_cache().search(search, repo_id, token)
 }
 
 #[get("/repo")]
@@ -440,7 +440,6 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
     fn create_file_invalid_token() {
         let (temp, rocket, repo_id, token) = create_open_repo();
 
@@ -451,9 +450,12 @@ mod test {
         let file: Option<FileDescriptor> = post_to_repo("/file", &repo_id, &token, &cmd, &rocket);
 
         let other_token = AccessToken::new();
-        let page: Page = get_from_repo("/document/", &repo_id, &other_token, &rocket);
-    }
 
+        let mut req = MockRequest::new(Get, format!("/rest/v1/repo/{}/document", &repo_id));
+        req.add_header(Header::new("token", format!("{}", &other_token.id)));
+        let mut response = req.dispatch_with(&rocket);
+        assert_eq!(Status::Unauthorized, response.status());
+    }
 
     #[test]
     fn good_case_create_file_and_list() {

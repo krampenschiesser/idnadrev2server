@@ -2,6 +2,7 @@ mod filter;
 mod searchparam;
 
 pub use self::searchparam::SearchParam;
+use self::filter::filter_text;
 
 use crypt::{CryptoSender, CryptoIfc, FileHeaderDescriptor};
 use crypt::AccessToken;
@@ -90,10 +91,41 @@ impl SearchParam {
             }
         }
 
-        //any
-        //text filters
-        //date filters
+        if let Some(ref any) = self.any {
+            let contained = fuzzy_contains(any.as_str(), file.name.as_str());
+            let contained = contained || {
+                for tag in &file.tags {
+                    if fuzzy_contains(any.as_str(), tag.as_str()) {
+                        return true
+                    }
+                }
+                false
+            };
+            if !contained {
+                return false;
+            }
+            //let contained = contained || search_in_content(any,file.content); //fixme need to add content search and retrieve....
+        }
 
+        if !self.text_filters.is_empty() {
+            if let Some(ref details) = file.details {
+               if !self.text_filters.iter().all(|filter| filter.test(details)) {
+                   return false;
+               }
+            } else {
+                return false;
+            }
+        }
+
+        if !self.date_filters.is_empty() {
+            if let Some(ref details) = file.details {
+                if !self.date_filters.iter().all(|filter| filter.test(details)) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
         true
     }
 
