@@ -23,6 +23,7 @@
 //! |GET /repo/`<uuid>`/file              |Lists all files in a repository               |[`Page`](dto/struct.Page.html) of [`File`](dto/struct.File.html), see [Paging](#searching-and-paging) below|
 //! |GET /repo/`<uuid>`/file/`<uui>`      |Retrieves a file header                       |[`File`](dto/struct.File.html), only header filled|
 //! |GET /repo/`<uuid>`/file/`<uui>`/full |Retrieves a file with content                 |[`File`](dto/struct.File.html), content and header filled|
+//! |GET /repo/`<uuid>`/file/sync         |Retrieves a sync                              |[`Sync`](dto/struct.Sync.html), see [Sync](#sync)|
 //!
 //! ### Specialized GET methods
 //!
@@ -30,11 +31,12 @@
 //!
 //! For example when you have a type = **doc**
 //!
-//! |Path                                             |Description                      |Returns|
-//! |-------------------------------------------------|:--------------------------------|-------|
-//! |GET /repo/`<uuid>`/doc/                  |Retrieves all documents in repo  |Same as above|
+//! |Path                                             |Description                          |Returns|
+//! |-------------------------------------------------|:------------------------------------|-------|
+//! |GET /repo/`<uuid>`/doc/                  |Retrieves all documents in repo              |Same as above|
 //! |GET /repo/`<uuid>`/doc/`<uui>`/          |Retrieves the header of a file with type doc |Same as above|
 //! |GET /repo/`<uuid>`/doc/`<uui>`/full      |Retrieves a file of type doc with content    |Same as above|
+//! |GET /repo/`<uuid>`/doc/sync              |Retrieves a sync                             |[`Sync`](dto/struct.Sync.html), see [Sync](#sync)|
 //!
 //!
 //! ## POST Methods
@@ -52,6 +54,30 @@
 //! |-------------------------------------------|:------------------------------|
 //! |DELETE /repo/`<uuid>`                      |Delete an existing repository  |
 //! |DELETE /repo/`<uuid>`/file/`<uui>`         |Delete file in repository      |
+//!
+//! ## Sync
+//!
+//! If you have clients with full offline capabilities they have to retrieve only changes made to the repository.
+//! A simple way to do this would be to ask for files modified after the max(modification) time in the local storage.
+//! However once the storage of the repository is shared this won't work anymore as a file modification might become
+//! visible in the next `sync` between the two repositories.
+//! The sync method consists of the following:
+//!
+//! 1. a `modificationStartTime` time to indicate which changes to get, everything after the modification start time
+//! 2. a sha1 hash over the id's and versions of all local files before that modification time
+//! 3. an optional `modificationEndTime` if given this will indicate to the server to check the hash in that time frame
+//!     if the hash matches only a successful sync will be returned, otherwise it will be filled with versions and ids
+//!
+//! With this method the server can quickly compute the hash on its own and see if nothing changed in the client data
+//! This would be the case for simple 1 user systems.
+//! The client/server can also cache the sha1 checksum for specific age groups using the optional `modificationEndTime` parameter
+//! to peek for changes.
+//!
+//! If the hash matches a sync reply contains the ID's and versions that have a modifcation time after the given modfication start time.
+//! If the hash does not match it will return a sync with hash_matches flag set to false.
+//!
+//! If it is a peek request with the optional `modificationEndTime` parameter given, it will either return a successful sync
+//! or the ID's and versions in that range.
 //!
 //! ## Searching and paging
 //!

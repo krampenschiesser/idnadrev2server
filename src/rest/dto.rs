@@ -19,7 +19,7 @@ use chrono::{DateTime, UTC};
 use std::fmt::Display;
 use std::fmt;
 use serde_json;
-use crypt::FileHeaderDescriptor;
+use crypt::{FileHeaderDescriptor};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +43,23 @@ pub struct Page {
     pub limit: u32,
     pub next: Option<String>,
     pub previous: Option<String>,
+}
+
+pub struct SyncFileDescriptor {
+    pub id: Uuid,
+    pub version: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Sync {
+    pub repository: Uuid,
+    pub files: Vec<SyncFileDescriptor>,
+
+    pub modification_start: DateTime<UTC>,
+    pub modification_end: Option<DateTime<UTC>>,
+
+    pub hash_matches: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
