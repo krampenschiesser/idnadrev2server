@@ -3,5 +3,5 @@ certs = "localhost.crt"
 key = "localhost.key"
 
 [development]
-ui_dir = "D:\\projects\\idnadrev2ui\\build"
+ui_dir = "/home/scar/WebstormProjects/idnadrev2ui/build"
 repository_dirs= ["testfolder"]
