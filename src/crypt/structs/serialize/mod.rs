@@ -31,6 +31,7 @@ pub trait ByteSerialization: Sized {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dto::*;
 
     #[test]
     fn enc_type() {

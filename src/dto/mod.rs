@@ -7,31 +7,64 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! # Interface objects
-//!
-//!
-//!
-//!
-//!
-
 use uuid::Uuid;
 use chrono::{DateTime, UTC};
-use std::fmt::Display;
-use std::fmt;
 use serde_json;
-use crypt::{FileHeaderDescriptor};
+use rocket::Request;
+use rocket::request::Outcome as Return;
+use rocket::Outcome;
+use rocket::http::Status;
+use crypt::{FileHeader, EncryptedFile};
+use crypt::{RepoHeader, Repository};
+use std::time::Instant;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct Repository {
+
+use std::fmt::{Display, Formatter};
+use std::fmt;
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
+pub struct AccessToken {
     pub id: Uuid,
-    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum EncryptionType {
-    ChaCha,
-    AES,
+    None,
+    RingChachaPoly1305,
+    RingAESGCM,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum PasswordHashType {
+    None,
+    Argon2i { iterations: u16, memory_costs: u16, parallelism: u16 },
+    SCrypt { iterations: u8, memory_costs: u32, parallelism: u32 },
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct RepositoryDto {
+    pub id: Uuid,
+    pub token: AccessToken,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct FileDescriptor {
+    pub repo: Uuid,
+    pub id: Uuid,
+    pub version: u32,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+pub struct FileHeaderDescriptor {
+    pub descriptor: FileDescriptor,
+    pub header: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryDescriptor {
+    pub id: Uuid,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -45,16 +78,18 @@ pub struct Page {
     pub previous: Option<String>,
 }
 
-pub struct SyncFileDescriptor {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SynchronizationFileDescriptor {
     pub id: Uuid,
     pub version: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct Sync {
+pub struct Synchronization {
     pub repository: Uuid,
-    pub files: Vec<SyncFileDescriptor>,
+    pub files: Vec<SynchronizationFileDescriptor>,
 
     pub modification_start: DateTime<UTC>,
     pub modification_end: Option<DateTime<UTC>>,
@@ -106,7 +141,7 @@ pub struct File {
 
 }
 
-impl Display for Repository {
+impl Display for RepositoryDescriptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Repository [name='{}', id={}]", self.name, self.id, )
     }
@@ -120,7 +155,7 @@ impl Display for File {
     }
 }
 
-#[derive(Serialize,Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct ReducedFile {
     pub name: String,
@@ -130,7 +165,7 @@ struct ReducedFile {
     pub deleted: Option<DateTime<UTC>>,
 
     pub file_type: String,
-    pub tags:  Vec<String>,
+    pub tags: Vec<String>,
     pub details: Option<serde_json::Value>,
 }
 
@@ -149,19 +184,19 @@ impl ReducedFile {
         }
     }
 
-    pub fn from_descriptor(desc: &FileHeaderDescriptor) -> Result<Self,String>{
+    pub fn from_descriptor(desc: &FileHeaderDescriptor) -> Result<Self, String> {
         use serde_json::from_str;
 
         let file = match from_str(desc.header.as_str()) {
             Ok(obj) => obj,
-            Err(e) => return Err(format!("{}",e))
+            Err(e) => return Err(format!("{}", e))
         };
         Ok(file)
     }
 }
 
 impl File {
-    pub fn from_descriptor(desc: &FileHeaderDescriptor) -> Result<Self,String>{
+    pub fn from_descriptor(desc: &FileHeaderDescriptor) -> Result<Self, String> {
         let reduced = ReducedFile::from_descriptor(desc)?;
         let f = File {
             repository: desc.descriptor.repo,
@@ -214,12 +249,6 @@ impl File {
     }
 }
 
-use ::rocket::Request;
-use ::rocket::request::Outcome as Return;
-use ::rocket::Outcome;
-use ::rocket::http::Status;
-use super::super::crypt::AccessToken;
-
 impl<'a, 'r> ::rocket::request::FromRequest<'a, 'r> for AccessToken {
     type Error = String;
 
@@ -237,6 +266,38 @@ impl<'a, 'r> ::rocket::request::FromRequest<'a, 'r> for AccessToken {
     }
 }
 
+impl AccessToken {
+    pub fn new() -> Self {
+        AccessToken { id: Uuid::new_v4() }
+    }
+}
+
+impl Display for AccessToken {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "Token {}", self.id.simple())
+    }
+}
+
+impl FileDescriptor {
+    pub fn new(header: &FileHeader) -> Self {
+        FileDescriptor { repo: header.get_repository_id(), id: header.get_id(), version: header.get_version() }
+    }
+}
+
+impl FileHeaderDescriptor {
+    pub fn new(enc_file: &EncryptedFile) -> Self {
+        let ref h = enc_file.get_encryption_header();
+        let descriptor = FileDescriptor { repo: h.get_repository_id(), id: h.get_id(), version: h.get_version() };
+        FileHeaderDescriptor { header: enc_file.get_header().clone(), descriptor: descriptor }
+    }
+}
+
+impl RepositoryDescriptor {
+    pub fn new(repo: &Repository) -> Self {
+        RepositoryDescriptor { id: repo.get_id(), name: repo.get_name().clone() }
+    }
+}
+
 impl Page {
     pub fn empty() -> Self {
         Page {
@@ -247,5 +308,24 @@ impl Page {
             offset: 0,
             total: None,
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_eq() {
+        use std::str::FromStr;
+
+        let uuid = Uuid::from_str("1074e93b-e8e7-465e-9fb1-54da4e5c136b").unwrap();
+        let token1 = AccessToken { id: uuid };
+
+        let uuid = Uuid::from_str("1074e93b-e8e7-465e-9fb1-54da4e5c136b").unwrap();
+        let token2 = AccessToken { id: uuid };
+
+        assert_eq!(token1, token2);
     }
 }

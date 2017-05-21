@@ -9,7 +9,6 @@
 
 pub mod state;
 pub mod communication;
-pub mod dto;
 
 
 #[cfg(test)]

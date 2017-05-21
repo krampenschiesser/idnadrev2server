@@ -4,10 +4,9 @@ mod searchparam;
 pub use self::searchparam::SearchParam;
 use self::filter::filter_text;
 
-use crypt::{CryptoSender, CryptoIfc, FileHeaderDescriptor};
-use crypt::AccessToken;
+use crypt::{CryptoSender, CryptoIfc };
 use uuid::Uuid;
-use rest::dto::{Page, File};
+use dto::{AccessToken, Page, File,FileHeaderDescriptor};
 
 pub struct SearchCache {
     pub crypt_sender: CryptoSender,

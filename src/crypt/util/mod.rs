@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::structs::EncryptionType;
+use dto::EncryptionType;
 use super::structs::crypto::HashedPw;
 use super::error::RingError;
 use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey, Algorithm};
@@ -58,7 +58,7 @@ pub fn random_vec(len: usize) -> Vec<u8> {
 mod tests {
     use super::*;
     use super::super::structs::crypto::{HashedPw, PlainPw};
-    use super::super::structs::{EncryptionType, PasswordHashType};
+    use dto::{EncryptionType, PasswordHashType};
 
     fn hashed_key() -> HashedPw {
         let plainpw = PlainPw::new("hello".as_bytes());

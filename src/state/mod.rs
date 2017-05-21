@@ -7,12 +7,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crypt::{CryptoActor, CryptoSender, CryptError, AccessToken};
+use crypt::{CryptoActor, CryptoSender, CryptError};
 use std::path::{PathBuf, Path};
 use uuid::Uuid;
 use search::SearchCache;
 use crypt::CryptoIfc;
 use std::sync::RwLock;
+use dto::AccessToken;
 
 pub struct GlobalState {
     crypt_actor: CryptoActor,

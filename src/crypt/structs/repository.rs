@@ -7,7 +7,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{EncryptionType, PasswordHashType, MainHeader, FileVersion};
+use dto::{EncryptionType,PasswordHashType};
+use super::{MainHeader, FileVersion};
 use super::crypto::{HashedPw, DoubleHashedPw, PlainPw};
 use super::super::error::{CryptError, ParseError};
 use super::super::util::random_vec;

@@ -8,7 +8,8 @@
 // except according to those terms.
 
 use super::super::structs::repository::{RepoHeader, Repository};
-use super::{EncryptionType, MainHeader, FileVersion};
+use dto::EncryptionType;
+use super::{MainHeader, FileVersion};
 use super::crypto::HashedPw;
 use super::super::util::{decrypt, encrypt};
 use super::super::error::{CryptError, ParseError};

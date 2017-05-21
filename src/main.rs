@@ -39,6 +39,7 @@ extern crate sha1;
 #[cfg(test)]
 extern crate spectral;
 
+mod dto;
 mod search;
 mod crypt;
 pub mod rest;
@@ -51,7 +52,7 @@ use std::sync::mpsc::{channel};
 use std::path::{PathBuf, Path};
 use rocket::config::{self, ConfigError};
 use std::thread;
-use rest::dto::*;
+use dto::*;
 use rocket::http::Method::*;
 use rocket::{Route};
 use state::GlobalState;

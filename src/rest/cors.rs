@@ -13,7 +13,7 @@ use rocket::handler;
 use rocket::http::{Header, Status, Method};
 use state::GlobalState;
 use crypt::CryptoActor;
-use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto, AccessToken};
+use dto::{RepositoryDescriptor, RepositoryDto, AccessToken};
 use serde_json::to_string;
 use rocket_contrib::UUID;
 use rocket::State;

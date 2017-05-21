@@ -8,9 +8,9 @@
 // except according to those terms.
 
 use super::communication::{CryptCmd, CryptResponse};
-use super::dto::*;
+use dto::*;
 use super::state::State;
-use super::super::structs::{FileVersion, EncryptionType, PasswordHashType};
+use super::super::structs::{FileVersion};
 use super::super::structs::crypto::{PlainPw, HashedPw};
 use super::super::structs::repository::{Repository, RepoHeader};
 use super::super::structs::file::{EncryptedFile, FileHeader};
@@ -89,7 +89,7 @@ fn open_repository(id: &Uuid, user_name: &String, pw: &[u8], state: &mut State) 
     }
 }
 
-fn create_repository(name: &str, pw: &[u8], enc: &EncTypeDto, kdf: &PwKdfDto, folder_id: Option<u16>, state: &mut State) -> Result<CryptResponse, String> {
+fn create_repository(name: &str, pw: &[u8], enc: &EncryptionType, kdf: &PasswordHashType, folder_id: Option<u16>, state: &mut State) -> Result<CryptResponse, String> {
     if state.has_repository_with_name(name) {
         return Ok(CryptResponse::RepositoryAlreadyExists { name: name.to_string() });
     }
@@ -104,11 +104,9 @@ fn create_repository(name: &str, pw: &[u8], enc: &EncTypeDto, kdf: &PwKdfDto, fo
     };
 
     let pw = PlainPw::new(pw);
-    let enc_type = EncryptionType::from(enc);
-    let pwh = PasswordHashType::from(kdf);
 
-    let header = RepoHeader::new(pwh.clone(), enc_type.clone());
-    let key = HashedPw::new(pw.clone(), &enc_type, &pwh, header.get_salt());
+    let header = RepoHeader::new(kdf.clone(), enc.clone());
+    let key = HashedPw::new(pw.clone(), &enc, &kdf, header.get_salt());
 
     let mut repo = Repository::new(name, pw, header);
     let path = path.join(format!("{}", repo.get_id().clone().simple()));
@@ -443,7 +441,6 @@ pub mod tests {
     use log4rs;
     use super::super::super::util::io::{check_map_path};
     use super::super::state::scanresult::CheckRes;
-    use super::super::dto::PwKdfDto;
 
     pub fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
         let tempdir = TempDir::new("temp_repo").unwrap();
@@ -473,8 +470,8 @@ pub mod tests {
         let temp = TempDir::new("create_repo_test").unwrap();
         let dir = temp.path().to_path_buf();
         let mut state = State::new(vec![dir]).unwrap();
-        let scrypt = PwKdfDto::SCrypt { iterations: 4, parallelism: 2, memory_costs: 12 };
-        let response = create_repository("hallo", "password".as_bytes(), &EncTypeDto::AES, &scrypt, None, &mut state).unwrap();
+        let scrypt = PasswordHashType::SCrypt { iterations: 4, parallelism: 2, memory_costs: 12 };
+        let response = create_repository("hallo", "password".as_bytes(), &EncryptionType::RingAESGCM, &scrypt, None, &mut state).unwrap();
 
         let (token, id) = match response {
             CryptResponse::RepositoryCreated { token, id } => {

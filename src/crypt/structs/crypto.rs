@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{EncryptionType, PasswordHashType};
+use dto::{EncryptionType, PasswordHashType};
 use std::path::PathBuf;
 use ring::constant_time::verify_slices_are_equal;
 

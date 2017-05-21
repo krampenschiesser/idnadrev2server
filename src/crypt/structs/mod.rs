@@ -20,27 +20,13 @@ use byteorder::{WriteBytesExt, LittleEndian};
 use self::serialize::*;
 use std::io::{Read, Write, Cursor};
 use super::error::{ParseError};
-use super::actor::dto::{EncTypeDto, PwKdfDto};
-
+use dto::{EncryptionType,PasswordHashType};
 
 pub mod crypto;
 pub mod file;
 pub mod repository;
 pub mod serialize;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum EncryptionType {
-    None,
-    RingChachaPoly1305,
-    RingAESGCM,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum PasswordHashType {
-    None,
-    Argon2i { iterations: u16, memory_costs: u16, parallelism: u16 },
-    SCrypt { iterations: u8, memory_costs: u32, parallelism: u32 },
-}
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum FileVersion {
@@ -102,14 +88,6 @@ impl PasswordHashType {
     }
 }
 
-impl<'a> From<&'a PwKdfDto> for PasswordHashType {
-    fn from(dto: &PwKdfDto) -> Self {
-        match dto {
-            &PwKdfDto::SCrypt { iterations, memory_costs, parallelism } => PasswordHashType::SCrypt { iterations: iterations, memory_costs: memory_costs, parallelism: parallelism },
-        }
-    }
-}
-
 impl EncryptionType {
     pub fn key_len(&self) -> usize {
         match *self {
@@ -139,15 +117,6 @@ impl EncryptionType {
             EncryptionType::RingAESGCM => Some(&AES_256_GCM),
             EncryptionType::RingChachaPoly1305 => Some(&CHACHA20_POLY1305),
             EncryptionType::None => None,
-        }
-    }
-}
-
-impl<'a> From<&'a EncTypeDto> for EncryptionType {
-    fn from(dto: &EncTypeDto) -> Self {
-        match dto {
-            &EncTypeDto::AES => EncryptionType::RingAESGCM,
-            &EncTypeDto::ChaCha => EncryptionType::RingChachaPoly1305,
         }
     }
 }

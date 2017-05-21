@@ -9,12 +9,12 @@
 
 use std::collections::{HashMap};
 use std::collections::hash_map::Values;
-use super::super::dto::FileHeaderDescriptor;
+use dto::FileHeaderDescriptor;
 use super::super::super::structs::file::{EncryptedFile, FileHeader};
 use super::super::super::structs::repository::{Repository, RepoHeader};
 use super::super::super::structs::crypto::HashedPw;
 use super::super::super::error::CryptError;
-use super::super::dto::AccessToken;
+use dto::AccessToken;
 use uuid::Uuid;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};

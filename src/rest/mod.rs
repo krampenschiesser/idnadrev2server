@@ -151,26 +151,24 @@ use rocket::response::Stream;
 use rocket_contrib::{JSON};
 use std::io::Cursor;
 use std::sync::{RwLock, Arc};
-use self::dto::{CreateRepository, File};
 use uuid::Uuid;
 use crypt::CryptoIfc;
-
+use dto::*;
 
 #[cfg(debug_assertions)]
 pub mod cors;
 
 pub mod ui;
-pub mod dto;
 
 use search::SearchParam;
 use rocket::{Route, Data, Outcome, Request, Response};
 use rocket::response::Body;
 use rocket::handler;
 use rocket::http::{Header, Status, Method};
-use self::dto::{Page, OpenRepository};
+use dto::{Page, OpenRepository};
 use state::GlobalState;
 use crypt::CryptoActor;
-use crypt::actor::dto::{RepositoryDescriptor, EncTypeDto, RepositoryDto, AccessToken};
+use dto::{RepositoryDescriptor, RepositoryDto, AccessToken};
 use serde_json::to_string;
 use std::path::PathBuf;
 //
@@ -259,7 +257,7 @@ pub fn list_repositories(state: State<GlobalState>) -> Response {
 pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<GlobalState>) -> Response {
     info!("#create_repository");
     let c: &CryptoActor = state.crypt();
-    let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncTypeDto::ChaCha);
+    let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncryptionType::RingChachaPoly1305);
     let (body, status) = match option {
         None => ("No result...".to_string(), Status::NotFound),
         Some(res) => (to_string(&res).unwrap(), Status::Ok),
@@ -355,13 +353,13 @@ mod test {
     use rocket::http::Method::*;
     use std::sync::{Arc, RwLock};
     use uuid::Uuid;
-    use super::dto::*;
+    use dto::*;
     use serde_json::from_str;
     use rocket::http::{Header, ContentType};
     use tempdir::TempDir;
     use rocket::{Route, Rocket, Response};
     use state::GlobalState;
-    use crypt::actor::dto::*;
+    use dto::*;
     use chrono::{DateTime, UTC};
 
     use spectral::prelude::*;
@@ -447,11 +445,11 @@ mod test {
 
     fn create_open_repo() -> (TempDir, Rocket, Uuid, AccessToken) {
         let (temp, rocket) = setup();
-        let vec: Vec<Repository> = get_ok("/rest/v1/repo", &rocket);
+        let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &rocket);
         assert_that(&vec).is_empty();
-        let cmd = CreateRepository { name: "repo".to_string(), user_name: "none".to_string(), encryption: EncryptionType::ChaCha, password: vec![1, 2, 3] };
+        let cmd = CreateRepository { name: "repo".to_string(), user_name: "none".to_string(), encryption: EncryptionType::RingChachaPoly1305, password: vec![1, 2, 3] };
         let response: Option<RepositoryDto> = post_ok("/rest/v1/repo", &cmd, &rocket);
-        let vec: Vec<Repository> = get_ok("/rest/v1/repo", &rocket);
+        let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &rocket);
         assert_that(&vec).has_length(1);
         let repo_id = &vec[0].id;
         let cmd = OpenRepository { user_name: String::new(), password: vec![1, 2, 3] };

@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::dto::*;
+use dto::*;
 use super::super::util::io::path_to_str;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -24,7 +24,7 @@ pub enum CryptCmd {
     GetFileHeader { token: AccessToken, file: FileDescriptor },
     GetFile { token: AccessToken, file: FileDescriptor },
 
-    CreateRepository { name: String, pw: Vec<u8>, encryption: EncTypeDto, kdf: PwKdfDto, folder_id: Option<u16> },
+    CreateRepository { name: String, pw: Vec<u8>, encryption: EncryptionType, kdf: PasswordHashType, folder_id: Option<u16> },
     OpenRepository { id: Uuid, user_name: String, pw: Vec<u8> },
     CloseRepository { token: AccessToken, id: Uuid },
     ListRepositories,

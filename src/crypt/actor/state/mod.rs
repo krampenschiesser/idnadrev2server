@@ -13,7 +13,7 @@ use super::super::error::CryptError;
 use super::super::util::io::scan;
 use self::repositorystate::RepositoryState;
 use self::scanresult::{ScanResult, CheckRes};
-use super::dto::AccessToken;
+use dto::AccessToken;
 
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
