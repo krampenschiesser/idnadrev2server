@@ -9,58 +9,82 @@
 
 use std::io;
 use std::path::{PathBuf, Path};
-use rocket::response::NamedFile;
-use rocket::{Response, State};
-use rocket::response::Redirect;
-use rocket::http::{Status, ContentType};
 use std::io::Cursor;
-
+use iron::prelude::*;
+use iron::status;
+use persistent::Read;
 use state::UiState;
+use router::Router;
 
-#[get("/")]
-pub fn index(state: State<UiState>) -> io::Result<NamedFile> {
-    info!("{:?}", state.ui_dir);
-    NamedFile::open(state.ui_dir.join("index.html"))
+//#[get("/")]
+pub fn index(req: &mut Request) -> IronResult<Response> {
+    read_single_file("index.html", &mut req)
 }
 
-#[get("/manifest.appcache")]
-pub fn manifest(state: State<UiState>) -> Response {
-    let hash = state.compute_hash();
-    let status = if hash.is_ok() { Status::Ok } else { Status::InternalServerError };
+fn read_file_string(path: &PathBuf) -> Result<String, ::std::io::Error> {
+    use std::fs::File;
+    use std::io::{ErrorKind, Error};
+
+    let file = File::open(path);
+    let mut val = String::new();
+    match file.read_to_string(&mut val) {
+        Ok(_) => Ok(val),
+        Err(e) => Err(Error::new(ErrorKind::Other, "Could not read file"))
+    }
+}
+
+pub fn manifest(req: &mut Request) -> IronResult<Response> {
+    use iron::headers::ContentType;
+
+    let ui_state = req.get::<Read<UiState>>().unwrap().as_ref();
+
+    let hash = ui_state.compute_hash();
+    let status = if hash.is_ok() { status::Ok } else { status::InternalServerError };
 
     let body = if hash.is_ok() { hash.unwrap() } else { format!("{}", hash.err().unwrap()) };
 
-    Response::build()
-        .sized_body(Cursor::new(body))
-        .raw_header("Content-Type", "text/cache-manifest")
-        .status(status)
-        .finalize()
+    let mut response = Response::with((status, body));
+    response.headers.set(ContentType(mime!(Text/CacheManifest)));
+    Ok(response)
 }
 
-#[get("/static/<file..>", rank = 9)]
-pub fn files(file: PathBuf, state: State<UiState>) -> Option<NamedFile> {
-    NamedFile::open(state.ui_dir.join("static").join(file)).ok()
+//#[get("/static/<file..>", rank = 9)]
+pub fn files(req: &mut Request) -> IronResult<Response> {
+    let ui_state = req.get::<Read<UiState>>().unwrap().as_ref();
+    let ref file = req.extensions.get::<Router>()
+        .unwrap().find("file_name").unwrap_or("/");
+
+    let path = ui_state.ui_dir.join("static").join(file);
+    let result = read_file_string(path)?;
+    Ok(Response::with((status::Ok, result)))
 }
 
-#[get("/asset-manifest.json")]
-pub fn asset_mainfest(state: State<UiState>) -> Option<NamedFile> {
-    NamedFile::open(state.ui_dir.join("asset-manifest.json")).ok()
+fn read_single_file(name: &str, req: &mut Request) -> IronResult<Response> {
+    let ui_state = req.get::<Read<UiState>>().unwrap().as_ref();
+    let path = ui_state.ui_dir.join(name);
+    let result = read_file_string(path)?;
+    Ok(Response::with((status::Ok, result)))
 }
 
-#[get("/favicon.ico")]
-pub fn favicon(state: State<UiState>) -> Option<NamedFile> {
-    NamedFile::open(state.ui_dir.join("favicon.ico")).ok()
+//#[get("/asset-manifest.json")]
+pub fn asset_mainfest(req: &mut Request) -> IronResult<Response> {
+    read_single_file("asset-manifest.json", &mut req)
 }
 
-#[get("/index.html")]
-pub fn index_html(state: State<UiState>) -> Option<NamedFile> {
-    NamedFile::open(state.ui_dir.join("index.html")).ok()
+//#[get("/favicon.ico")]
+pub fn favicon(req: &mut Request) -> IronResult<Response> {
+    read_single_file("favicon.ico", &mut req)
 }
 
-#[get("/<any..>", rank = 10)]
+//#[get("/index.html")]
+pub fn index_html(req: &mut Request) -> IronResult<Response> {
+    read_single_file("index.html", &mut req)
+}
+
 //pub fn any(any: PathBuf, ui_dir: State<UiDir>) -> Option<NamedFile> {
 //    NamedFile::open(ui_dir.0.join("index.html")).ok()
 //}
-pub fn any(any: PathBuf, state: State<UiState>) -> Redirect {
-    Redirect::to("/")
+pub fn any(_: &Request) -> IronResult<Response> {
+    use iron::modifiers::Redirect;
+    Ok(Response::with((status::Found, Redirect("/"))))
 }

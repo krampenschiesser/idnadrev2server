@@ -145,10 +145,8 @@
 //! * le = Less than or equal to
 //!
 
-use rocket_contrib::UUID;
 use rocket::State;
 use rocket::response::Stream;
-use rocket_contrib::{JSON};
 use std::io::Cursor;
 use std::sync::{RwLock, Arc};
 use uuid::Uuid;
@@ -227,7 +225,10 @@ pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> 
 
     if state.check_token(&repo_id, &token) {
         let page = list_files_internal(search, &repo_id, &token, state.inner());
-        Outcome::of(JSON(page))
+        match to_string(page) {
+            Ok(str) => Outcome::of(str),
+            Err(e) => Outcome::Failure(Status::InternalServerError)
+        }
     } else {
         Outcome::Failure(Status::Unauthorized)
     }
@@ -254,7 +255,7 @@ pub fn list_repositories(state: State<GlobalState>) -> Response {
 }
 
 #[post("/repo", data = "<create_repo>")]
-pub fn create_repository(create_repo: JSON<CreateRepository>, state: State<GlobalState>) -> Response {
+pub fn create_repository(create_repo: CreateRepository, state: State<GlobalState>) -> Response {
     info!("#create_repository");
     let c: &CryptoActor = state.crypt();
     let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncryptionType::RingChachaPoly1305);
@@ -387,8 +388,8 @@ mod test {
         (temp, rocket)
     }
 
-    fn body_to_json<T>(response: &mut Response) -> T
-        where T: ::serde::Deserialize {
+    fn body_to_json<'de, T>(response: &mut Response) -> T
+        where T: ::serde::Deserialize<'de> {
         let b = response.body().unwrap();
         let string = b.into_string().unwrap();
 
@@ -396,16 +397,16 @@ mod test {
         //        response.body().and_then(|b| from_str(b.into_string().unwrap().as_str()).ok()).unwrap()
     }
 
-    fn get_ok<T>(path: &str, rocket: &Rocket) -> T
-        where T: ::serde::Deserialize {
+    fn get_ok<'de, T>(path: &str, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize<'de> {
         let mut req = MockRequest::new(Get, path);
         let mut response = req.dispatch_with(&rocket);
         assert_eq!(Status::Ok, response.status());
         body_to_json(&mut response)
     }
 
-    fn get_from_repo<T>(suffix: &str, repo_id: &Uuid, token: &AccessToken, rocket: &Rocket) -> T
-        where T: ::serde::Deserialize {
+    fn get_from_repo<'de, T>(suffix: &str, repo_id: &Uuid, token: &AccessToken, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize<'de> {
         let mut req = MockRequest::new(Get, format!("/rest/v1/repo/{}{}", repo_id, suffix));
         req.add_header(Header::new("token", format!("{}", token.id)));
         let mut response = req.dispatch_with(&rocket);
@@ -413,8 +414,8 @@ mod test {
         body_to_json(&mut response)
     }
 
-    fn post_ok<T, B>(path: &str, body: &B, rocket: &Rocket) -> T
-        where T: ::serde::Deserialize,
+    fn post_ok<'de, T, B>(path: &str, body: &B, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize<'de>,
               B: ::serde::Serialize
     {
         use ::serde_json::to_string;
@@ -427,8 +428,8 @@ mod test {
         body_to_json(&mut response)
     }
 
-    fn post_to_repo<T, B>(suffix: &str, repo_id: &Uuid, token: &AccessToken, body: &B, rocket: &Rocket) -> T
-        where T: ::serde::Deserialize,
+    fn post_to_repo<'de, T, B>(suffix: &str, repo_id: &Uuid, token: &AccessToken, body: &B, rocket: &Rocket) -> T
+        where T: ::serde::Deserialize<'de>,
               B: ::serde::Serialize
     {
         use ::serde_json::to_string;

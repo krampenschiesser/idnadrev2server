@@ -10,10 +10,6 @@
 use uuid::Uuid;
 use chrono::{DateTime, UTC};
 use serde_json;
-use rocket::Request;
-use rocket::request::Outcome as Return;
-use rocket::Outcome;
-use rocket::http::Status;
 use crypt::{FileHeader, EncryptedFile};
 use crypt::{RepoHeader, Repository};
 use std::time::Instant;
@@ -248,7 +244,7 @@ impl File {
         (o, result)
     }
 }
-
+/*
 impl<'a, 'r> ::rocket::request::FromRequest<'a, 'r> for AccessToken {
     type Error = String;
 
@@ -265,7 +261,7 @@ impl<'a, 'r> ::rocket::request::FromRequest<'a, 'r> for AccessToken {
         }
     }
 }
-
+*/
 impl AccessToken {
     pub fn new() -> Self {
         AccessToken { id: Uuid::new_v4() }

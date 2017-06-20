@@ -4,34 +4,39 @@ version = "0.1.0"
 authors = ["krampenschiesser <krampenschiesser@gmail.com>"]
 
 [dependencies]
-#rocket = { version = "*", features = ["tls"]}
-rocket = "0.2.6"
-rocket_codegen = "0.2.6"
-rocket_contrib = {version = "0.2.6", default-features=true, features=["uuid"]}
-#serde = "1.0.0"
-#serde_json = "1.0.0"
-#serde_derive = "1.0.0"
-serde = "0.9"
+serde = "1.0.8"
+serde_json = "1.0.2"
+serde_derive = "1.0.8"
 rayon = "0.7.0"
-serde_json = "0.9"
-serde_derive = "0.9"
-base64 = "~0.4.0"
+base64 = "0.5.2"
 ring = "0.8.1"
-ring-pwhash = {git = "https://github.com/krampenschiesser/ring-pwhash.git"}
-#ring-pwhash = "0.1.2"
+ring-pwhash = "0.2.0"
 rand = "0.3.15"
 byteorder = { version = "1", features =["std"]}
-uuid = { version= "0.4.0", features = ["v4", "serde"]}
-chrono = { version = "=0.3.0", features = ["serde"] }
+uuid = { version= "0.5.0", features = ["v4", "serde"]}
+chrono = { version = "0.3.1", features = ["serde"] }
 tempdir= "0.3.5"
-notify = "4.0.0"
-log = "0.3.7"
-log4rs = "0.6.3"
+notify = "4.0.1"
+log = "0.3.8"
+log4rs = "0.7.0"
 distance = "0.4"
 needle = "0.1.1"
 thread_local = "0.3.3"
 sha1 = "0.2.0"
 
+## iron
+iron = "0.5.1"
+router = "0.5.1"
+persistent = "0.3.0"
+mount = "0.3.0"
+#urlencoded = "0.5.0"
+bodyparser = "0.7.0"
+#params = "0.6.0"
+hyper = "0.10.11"
+mime = "0.2.6"
+
 [dev-dependencies]
-rocket = { version = "0.2.6", features = ["testing"] }
 spectral = "0.6.0"
+
+[replace]
+#"chrono:0.3.0" = "chrono:0.3.1"

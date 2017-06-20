@@ -7,26 +7,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use rocket::{Route, Data, Outcome, Request, Response};
-use rocket::response::Body;
-use rocket::handler;
-use rocket::http::{Header, Status, Method};
-use state::GlobalState;
-use crypt::CryptoActor;
-use dto::{RepositoryDescriptor, RepositoryDto, AccessToken};
-use serde_json::to_string;
-use rocket_contrib::UUID;
-use rocket::State;
-use rocket::response::Stream;
-use rocket_contrib::{JSON};
-use std::io::Cursor;
-use std::sync::{RwLock, Arc};
-use uuid::Uuid;
-
+use iron::prelude::*;
+use iron::status;
 
 #[cfg(debug_assertions)]
-#[options("/repo/<repo_id>")]
-pub fn open_repo_ping(repo_id: UUID) -> Response<'static> {
+//#[options("/repo/<repo_id>")]
+pub fn open_repo_ping(req: &mut Request) -> IronResult<Response>{
+    let response = Response::with(status::Ok);
+    response.headers.set()
     Response::build()
         .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
         .raw_header("Access-Control-Allow-Methods", "POST")
@@ -36,8 +24,8 @@ pub fn open_repo_ping(repo_id: UUID) -> Response<'static> {
 }
 
 #[cfg(debug_assertions)]
-#[options("/repo")]
-pub fn create_repository() -> Response<'static> {
+//#[options("/repo")]
+pub fn create_repository(req: &mut Request) -> IronResult<Response> {
     Response::build()
         .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
         .raw_header("Access-Control-Allow-Methods", "POST")
@@ -47,8 +35,8 @@ pub fn create_repository() -> Response<'static> {
 }
 
 #[cfg(debug_assertions)]
-#[options("/repo/<repo_id>/file")]
-pub fn create_file(repo_id: UUID) -> Response<'static> {
+//#[options("/repo/<repo_id>/file")]
+pub fn create_file(req: &mut Request) -> IronResult<Response> {
     Response::build()
         .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
         .raw_header("Access-Control-Allow-Methods", "POST")
