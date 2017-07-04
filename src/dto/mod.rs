@@ -244,24 +244,26 @@ impl File {
         (o, result)
     }
 }
-/*
-impl<'a, 'r> ::rocket::request::FromRequest<'a, 'r> for AccessToken {
+
+use iron::Request;
+use std::convert::TryFrom;
+
+impl TryFrom<Request> for AccessToken {
     type Error = String;
 
-    fn from_request(request: &'a Request<'r>) -> Return<Self, Self::Error> {
-        let mut token = request.headers().get("token");
-        if let Some(token) = token.next() {
-            let res = Uuid::parse_str(token);
-            match res {
-                Ok(uid) => Outcome::Success(AccessToken { id: uid }),
-                Err(e) => Outcome::Failure((Status::BadRequest, format!("{}", e)))
+    fn try_from(req: Request) -> Result<AccessToken, String> {
+        match req.headers.get_raw("token") {
+            Some(token_str) => {
+                match Uuid::parse_str(token_str) {
+                    Ok(id) => Ok(AccessToken { id }),
+                    Err(_) => Err(format!("Could not parse Uuid {}", token_str))
+                }
             }
-        } else {
-            Outcome::Failure((Status::Unauthorized, "No token given".to_string()))
+            None => Err("No token set in header".to_string())
         }
     }
 }
-*/
+
 impl AccessToken {
     pub fn new() -> Self {
         AccessToken { id: Uuid::new_v4() }

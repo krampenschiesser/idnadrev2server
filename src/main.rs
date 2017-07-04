@@ -16,6 +16,7 @@ extern crate router;
 //extern crate urlencoded;
 extern crate persistent;
 extern crate mount;
+extern crate bodyparser;
 
 
 extern crate uuid;
@@ -42,6 +43,7 @@ extern crate distance;
 extern crate thread_local;
 extern crate rayon;
 extern crate sha1;
+extern crate unicase;
 
 #[cfg(test)]
 extern crate spectral;

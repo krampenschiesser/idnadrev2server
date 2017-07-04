@@ -9,38 +9,31 @@
 
 use iron::prelude::*;
 use iron::status;
+use hyper::header::{AccessControlAllowOrigin, AccessControlAllowHeaders};
+use hyper::method::Method;
+use unicase::UniCase;
+use iron::headers::AccessControlAllowMethods;
+
 
 #[cfg(debug_assertions)]
-//#[options("/repo/<repo_id>")]
-pub fn open_repo_ping(req: &mut Request) -> IronResult<Response>{
-    let response = Response::with(status::Ok);
-    response.headers.set()
-    Response::build()
-        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .raw_header("Access-Control-Allow-Methods", "POST")
-        .raw_header("Access-Control-Allow-Headers", "content-type")
-        .status(Status::Ok)
-        .finalize()
+pub fn open_repo_ping(req: &mut Request) -> IronResult<Response> {
+    create_response()
 }
 
 #[cfg(debug_assertions)]
-//#[options("/repo")]
 pub fn create_repository(req: &mut Request) -> IronResult<Response> {
-    Response::build()
-        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .raw_header("Access-Control-Allow-Methods", "POST")
-        .raw_header("Access-Control-Allow-Headers", "content-type")
-        .status(Status::Ok)
-        .finalize()
+    create_response()
 }
 
 #[cfg(debug_assertions)]
-//#[options("/repo/<repo_id>/file")]
 pub fn create_file(req: &mut Request) -> IronResult<Response> {
-    Response::build()
-        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .raw_header("Access-Control-Allow-Methods", "POST")
-        .raw_header("Access-Control-Allow-Headers", "content-type,token")
-        .status(Status::Ok)
-        .finalize()
+    create_response()
+}
+
+fn create_response() -> IronResult<Response> {
+    let response = Response::with(status::Ok);
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    response.headers.set(AccessControlAllowMethods(vec![Method::Post]));
+    response.headers.set(AccessControlAllowHeaders(vec![UniCase::new("content-type")]));
+    Ok(response)
 }

@@ -145,8 +145,6 @@
 //! * le = Less than or equal to
 //!
 
-use rocket::State;
-use rocket::response::Stream;
 use std::io::Cursor;
 use std::sync::{RwLock, Arc};
 use uuid::Uuid;
@@ -159,16 +157,18 @@ pub mod cors;
 pub mod ui;
 
 use search::SearchParam;
-use rocket::{Route, Data, Outcome, Request, Response};
-use rocket::response::Body;
-use rocket::handler;
-use rocket::http::{Header, Status, Method};
 use dto::{Page, OpenRepository};
 use state::GlobalState;
 use crypt::CryptoActor;
 use dto::{RepositoryDescriptor, RepositoryDto, AccessToken};
 use serde_json::to_string;
 use std::path::PathBuf;
+
+use iron::prelude::*;
+use persistent::Read;
+use router::Router;
+use iron::status;
+use iron::headers::AccessControlAllowOrigin;
 //
 //#[error(404)]
 //pub fn not_found<'a>(req: &'a Request) -> Response {
@@ -185,8 +185,7 @@ pub fn any<'a>(any: PathBuf) -> Response<'a> {
 }
 
 
-pub fn list_files<'r>(request: &'r Request, data: Data) -> handler::Outcome<'r> {
-    use rocket::request::FromRequest;
+pub fn list_files(req: &mut Request) -> IronResult<Response>{
 
     let search = if let Some(query) = request.uri().query() {
         match SearchParam::from_query_param(query) {
@@ -238,58 +237,67 @@ fn list_files_internal(search: SearchParam, repo_id: &Uuid, token: &AccessToken,
     state.search_cache().search(search, repo_id, token)
 }
 
-#[get("/repo")]
-pub fn list_repositories(state: State<GlobalState>) -> Response {
+//#[get("/repo")]
+pub fn list_repositories(req: &mut Request) -> IronResult<Response> {
+    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
+
     let c: &CryptoActor = state.crypt();
     let option = c.list_repositories();
     let (body, status) = match option {
-        None => ("No result...".to_string(), Status::NotFound),
-        Some(vec) => (to_string(&vec).unwrap(), Status::Ok),
+        None => ("No result...".to_string(), status::NotFound),
+        Some(vec) => (to_string(&vec).unwrap(), status::Ok),
     };
 
-    Response::build()
-        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .sized_body(Cursor::new(body))
-        .status(status)
-        .finalize()
+    let response = Response::with((status, body));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    Ok(response)
 }
 
-#[post("/repo", data = "<create_repo>")]
-pub fn create_repository(create_repo: CreateRepository, state: State<GlobalState>) -> Response {
+//#[post("/repo", data = "<create_repo>")]
+pub fn create_repository(req: &mut Request) -> IronResult<Response> {
+    let create_repo: CreateRepository = req.get::<::bodyparser::Struct<CreateRepository>>();
+
+    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
     info!("#create_repository");
     let c: &CryptoActor = state.crypt();
     let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncryptionType::RingChachaPoly1305);
     let (body, status) = match option {
-        None => ("No result...".to_string(), Status::NotFound),
-        Some(res) => (to_string(&res).unwrap(), Status::Ok),
+        None => ("No result...".to_string(), status::NotFound),
+        Some(res) => (to_string(&res).unwrap(), status::Ok),
     };
 
-    Response::build()
-        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .sized_body(Cursor::new(body))
-        .status(status)
-        .finalize()
+
+    let response = Response::with((status, body));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    Ok(response)
 }
 
-#[post("/repo/<repo_id>", data = "<open>")]
-pub fn open_repository(repo_id: UUID, open: JSON<OpenRepository>, state: State<GlobalState>) -> Response {
+//#[post("/repo/<repo_id>", data = "<open>")]
+pub fn open_repository(req: &mut Request) -> IronResult<Response> {
+    let open: OpenRepository = req.get::<::bodyparser::Struct<OpenRepository>>();
+    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id")?;
+    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
+
     info!("#open_repository");
     let c: &CryptoActor = state.crypt();
     let option = c.open_repository(&repo_id, open.user_name.clone(), open.password.clone());
     let (body, status) = match option {
-        None => ("No result...".to_string(), Status::NotFound),
-        Some(res) => (to_string(&res).unwrap(), Status::Ok),
+        None => ("No result...".to_string(), status::NotFound),
+        Some(res) => (to_string(&res).unwrap(), status::Ok),
     };
 
-    Response::build()
-        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .sized_body(Cursor::new(body))
-        .status(status)
-        .finalize()
+    let response = Response::with((status, body));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    Ok(response)
 }
 
-#[post("/repo/<repo_id>/file", data = "<file>")]
-pub fn create_file(repo_id: UUID, token: AccessToken, file: JSON<File>, state: State<GlobalState>) -> Response {
+//#[post("/repo/<repo_id>/file", data = "<file>")]
+pub fn create_file(req: &mut Request) -> IronResult<Response> {
+    let token = AccessToken::try_from(req)?;
+    let file: File = req.get::<::bodyparser::Struct<File>>();
+    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id")?;
+    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
+
     info!("#create_file");
     let file = file.into_inner();
     let repo_id = file.repository;
@@ -297,21 +305,19 @@ pub fn create_file(repo_id: UUID, token: AccessToken, file: JSON<File>, state: S
     let (content, header) = file.split_header_content();
     let header = match header {
         Ok(h) => h,
-        Err(e) => return Response::build().status(Status::BadRequest).finalize()
+        Err(e) => return Ok(Response::with(status::BadRequest))
     };
 
     let c: &CryptoActor = state.crypt();
     let option = c.create_new_file(&repo_id, &token, header, content.unwrap_or(Vec::new()));
     let (body, status) = match option {
-        None => ("No result...".to_string(), Status::NotFound),
-        Some(res) => (to_string(&res).unwrap(), Status::Ok),
+        None => ("No result...".to_string(), status::NotFound),
+        Some(res) => (to_string(&res).unwrap(), status::Ok),
     };
 
-    Response::build()
-        .raw_header("Access-Control-Allow-Origin", "http://localhost:3000")
-        .sized_body(Cursor::new(body))
-        .status(status)
-        .finalize()
+    let response = Response::with((status, body));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    Ok(response)
 }
 
 //
@@ -348,17 +354,11 @@ pub fn create_file(repo_id: UUID, token: AccessToken, file: JSON<File>, state: S
 
 #[cfg(test)]
 mod test {
-    use rocket;
-    use rocket::testing::MockRequest;
-    use rocket::http::Status;
-    use rocket::http::Method::*;
     use std::sync::{Arc, RwLock};
     use uuid::Uuid;
     use dto::*;
     use serde_json::from_str;
-    use rocket::http::{Header, ContentType};
     use tempdir::TempDir;
-    use rocket::{Route, Rocket, Response};
     use state::GlobalState;
     use dto::*;
     use chrono::{DateTime, UTC};
