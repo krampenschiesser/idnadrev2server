@@ -11,6 +11,7 @@ use chrono::{DateTime, UTC};
 use serde_json::Value;
 use std::fmt::Debug;
 use super::filter::{filter_text, filter_date};
+use std::convert::TryFrom;
 
 pub trait SearchFilter: Debug {
     fn test(&self, value: &Value) -> bool;
@@ -351,6 +352,22 @@ impl SearchParam {
         }
 
         Ok(retval)
+    }
+}
+
+use ironext::FromReq;
+
+impl FromReq for SearchParam {
+    fn try_from(req: Request) -> Result<SearchParam, String> {
+        match req.headers.get_raw("token") {
+            Some(token_str) => {
+                match Uuid::parse_str(token_str) {
+                    Ok(id) => Ok(AccessToken { id }),
+                    Err(_) => Err(format!("Could not parse Uuid {}", token_str))
+                }
+            }
+            None => Err("No token set in header".to_string())
+        }
     }
 }
 

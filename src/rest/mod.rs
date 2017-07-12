@@ -179,57 +179,38 @@ use iron::headers::AccessControlAllowOrigin;
 //    }
 //}
 
-#[get("/<any..>", rank = 5)]
-pub fn any<'a>(any: PathBuf) -> Response<'a> {
-    Response::build().status(Status::NotFound).raw_header("Access-Control-Allow-Origin", "http://localhost:3000").finalize()
-}
+//#[get("/<any..>", rank = 5)]
+//pub fn any<'a>(any: PathBuf) -> Response<'a> {
+//    Response::build().status(Status::NotFound).raw_header("Access-Control-Allow-Origin", "http://localhost:3000").finalize()
+//}
 
 
 pub fn list_files(req: &mut Request) -> IronResult<Response>{
 
-    let search = if let Some(query) = request.uri().query() {
-        match SearchParam::from_query_param(query) {
-            Err(e) => {
-                error!("{:?}", e);
-                return Outcome::failure(Status::BadRequest);
-            }
-            Ok(param) => param,
-        }
-    } else {
-        SearchParam::new()
-    };
-    let token = match AccessToken::from_request(request) {
-        Outcome::Success(t) => t,
-        _ => {
-            return Outcome::Failure(Status::BadRequest);
-        }
-    };
-    let repo_id: Uuid = match request.get_param(0) {
-        Ok(param) => {
-            match Uuid::parse_str(param) {
-                Ok(id) => id,
-                Err(e) => return Outcome::Failure(Status::BadRequest)
-            }
-        }
-        Err(e) => return Outcome::Failure(Status::BadRequest),
-    };
-    info!("Repository: {}", repo_id);
-
-    let state: State<GlobalState> = match State::from_request(request) {
-        Outcome::Success(state) => state,
-        _ => {
-            return Outcome::Failure(Status::BadRequest);
-        }
-    };
+    let search = SearchParam::try_from(req);
+//    let search = if let Some(query) = request.uri().query() {
+//        match SearchParam::from_query_param(query) {
+//            Err(e) => {
+//                error!("{:?}", e);
+//                return Outcome::failure(Status::BadRequest);
+//            }
+//            Ok(param) => param,
+//        }
+//    } else {
+//        SearchParam::new()
+//    };
+    let token = AccessToken::try_from(&req)?;
+    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id")?;
+    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
 
     if state.check_token(&repo_id, &token) {
         let page = list_files_internal(search, &repo_id, &token, state.inner());
         match to_string(page) {
-            Ok(str) => Outcome::of(str),
-            Err(e) => Outcome::Failure(Status::InternalServerError)
+            Ok(str) => Ok(Response::with(str)),
+            Err(e) => Ok(Response::with(status::InternalServerError))
         }
     } else {
-        Outcome::Failure(Status::Unauthorized)
+        Ok(Response::with((status::Unauthorized, "Token invalid")));
     }
 }
 

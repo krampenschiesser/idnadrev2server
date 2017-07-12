@@ -8,7 +8,7 @@
 // except according to those terms.
 
 use uuid::Uuid;
-use chrono::{DateTime, UTC};
+use chrono::{DateTime, Utc};
 use serde_json;
 use crypt::{FileHeader, EncryptedFile};
 use crypt::{RepoHeader, Repository};
@@ -87,8 +87,8 @@ pub struct Synchronization {
     pub repository: Uuid,
     pub files: Vec<SynchronizationFileDescriptor>,
 
-    pub modification_start: DateTime<UTC>,
-    pub modification_end: Option<DateTime<UTC>>,
+    pub modification_start: DateTime<Utc>,
+    pub modification_end: Option<DateTime<Utc>>,
 
     pub hash_matches: bool,
 }
@@ -125,9 +125,9 @@ pub struct File {
     pub version: u32,
     pub name: String,
 
-    pub created: DateTime<UTC>,
-    pub updated: DateTime<UTC>,
-    pub deleted: Option<DateTime<UTC>>,
+    pub created: DateTime<Utc>,
+    pub updated: DateTime<Utc>,
+    pub deleted: Option<DateTime<Utc>>,
 
     pub file_type: String,
     pub tags: Vec<String>,
@@ -156,9 +156,9 @@ impl Display for File {
 struct ReducedFile {
     pub name: String,
 
-    pub created: DateTime<UTC>,
-    pub updated: DateTime<UTC>,
-    pub deleted: Option<DateTime<UTC>>,
+    pub created: DateTime<Utc>,
+    pub updated: DateTime<Utc>,
+    pub deleted: Option<DateTime<Utc>>,
 
     pub file_type: String,
     pub tags: Vec<String>,
@@ -213,7 +213,7 @@ impl File {
     }
 
     pub fn new(repo: &Uuid, name: &str, file_type: &str, content: Option<Vec<u8>>) -> Self {
-        let now = UTC::now();
+        let now = Utc::now();
         File {
             repository: repo.clone(),
             id: Uuid::new_v4(),
@@ -245,13 +245,11 @@ impl File {
     }
 }
 
-use iron::Request;
-use std::convert::TryFrom;
+use iron::{Request,IronResult};
+use ironext::FromReq;
 
-impl TryFrom<Request> for AccessToken {
-    type Error = String;
-
-    fn try_from(req: Request) -> Result<AccessToken, String> {
+impl FromReq<AccessToken> for AccessToken {
+    fn from_req(req: &Request) -> IronResult<Self> {
         match req.headers.get_raw("token") {
             Some(token_str) => {
                 match Uuid::parse_str(token_str) {
