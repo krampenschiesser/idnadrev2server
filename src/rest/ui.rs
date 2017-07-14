@@ -84,7 +84,7 @@ pub fn index_html(req: &mut Request) -> IronResult<Response> {
 //pub fn any(any: PathBuf, ui_dir: State<UiDir>) -> Option<NamedFile> {
 //    NamedFile::open(ui_dir.0.join("index.html")).ok()
 //}
-pub fn any(_: &Request) -> IronResult<Response> {
+pub fn any(_: &mut Request) -> IronResult<Response> {
     use iron::modifiers::Redirect;
     Ok(Response::with((status::Found, Redirect("/"))))
 }

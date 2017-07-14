@@ -80,6 +80,12 @@ impl GlobalState {
     }
 }
 
+use iron::typemap::Key;
+
+impl Key for GlobalState {
+    type Value = GlobalState;
+}
+
 
 fn read_dir(root: &Path) -> ::std::io::Result<Vec<PathBuf>> {
     let dir = root.read_dir()?;

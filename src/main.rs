@@ -47,6 +47,8 @@ extern crate unicase;
 
 #[cfg(test)]
 extern crate spectral;
+#[cfg(test)]
+extern crate reqwest;
 
 mod ironext;
 mod dto;

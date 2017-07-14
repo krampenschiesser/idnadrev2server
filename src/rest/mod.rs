@@ -169,6 +169,8 @@ use persistent::Read;
 use router::Router;
 use iron::status;
 use iron::headers::AccessControlAllowOrigin;
+
+use ironext::{FromReq,StringError};
 //
 //#[error(404)]
 //pub fn not_found<'a>(req: &'a Request) -> Response {
@@ -187,7 +189,7 @@ use iron::headers::AccessControlAllowOrigin;
 
 pub fn list_files(req: &mut Request) -> IronResult<Response>{
 
-    let search = SearchParam::try_from(req);
+    let search = SearchParam::from_req(req)?;
 //    let search = if let Some(query) = request.uri().query() {
 //        match SearchParam::from_query_param(query) {
 //            Err(e) => {
@@ -199,8 +201,9 @@ pub fn list_files(req: &mut Request) -> IronResult<Response>{
 //    } else {
 //        SearchParam::new()
 //    };
-    let token = AccessToken::try_from(&req)?;
-    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id")?;
+    let token = AccessToken::from_req(&req)?;
+    let bla: String = req.extensions.get::<Router>();
+    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id");
     let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
 
     if state.check_token(&repo_id, &token) {

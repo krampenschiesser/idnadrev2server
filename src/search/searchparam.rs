@@ -7,11 +7,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use chrono::{DateTime, UTC};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::fmt::Debug;
 use super::filter::{filter_text, filter_date};
-use std::convert::TryFrom;
+use uuid::Uuid;
 
 pub trait SearchFilter: Debug {
     fn test(&self, value: &Value) -> bool;
@@ -55,7 +55,7 @@ pub enum FilterOperator {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DateFilter {
-    pub datetime: Option<DateTime<UTC>>,
+    pub datetime: Option<DateTime<Utc>>,
     pub field: String,
     pub operator: FilterOperator,
 }
@@ -197,13 +197,13 @@ impl QueryParam {
             }
         }
     }
-    pub fn get_date_value(&self) -> Result<DateTime<UTC>, QueryParamError> {
+    pub fn get_date_value(&self) -> Result<DateTime<Utc>, QueryParamError> {
         if self.is_date_search() {
             let date_text = self.get_text_value();
 
             match DateTime::parse_from_rfc3339(date_text.as_str()) {
                 Err(e) => Err(QueryParamError::InvalidDate { error: format!("{}", e), date: date_text }),
-                Ok(fixed_offset) => Ok(fixed_offset.with_timezone(&UTC))
+                Ok(fixed_offset) => Ok(fixed_offset.with_timezone(&Utc))
             }
         } else {
             Err(QueryParamError::InvalidDateTime(self.value.clone()))
@@ -274,7 +274,7 @@ impl SearchFilter for DateFilter {
 }
 
 impl DateFilter {
-    pub fn new(operator: FilterOperator, datetime: Option<DateTime<UTC>>, field: &str) -> Self {
+    pub fn new(operator: FilterOperator, datetime: Option<DateTime<Utc>>, field: &str) -> Self {
         DateFilter { datetime: datetime, field: field.to_string(), operator: operator }
     }
 
@@ -357,17 +357,9 @@ impl SearchParam {
 
 use ironext::FromReq;
 
-impl FromReq for SearchParam {
-    fn try_from(req: Request) -> Result<SearchParam, String> {
-        match req.headers.get_raw("token") {
-            Some(token_str) => {
-                match Uuid::parse_str(token_str) {
-                    Ok(id) => Ok(AccessToken { id }),
-                    Err(_) => Err(format!("Could not parse Uuid {}", token_str))
-                }
-            }
-            None => Err("No token set in header".to_string())
-        }
+impl FromReq<SearchParam> for SearchParam {
+    fn from_req(req: &::iron::Request) -> ::iron::IronResult<Self> {
+        Ok(SearchParam::new())
     }
 }
 

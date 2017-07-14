@@ -18,7 +18,7 @@
 use super::searchparam::{TextFilter, FilterOperator, DateFilter, SearchFilter};
 use serde_json::Value;
 use distance::sift3;
-use chrono::{TimeZone, DateTime, UTC, Duration};
+use chrono::{TimeZone, DateTime, Utc, Duration};
 
 fn find_string(name: &str, input: &Value) -> Option<String> {
     match input {
@@ -98,7 +98,7 @@ pub fn filter_date(filter: &DateFilter, value: &Value) -> bool {
                 return false
             }
             Ok(time_in_json) => {
-                let time_in_json = time_in_json.with_timezone(&UTC);
+                let time_in_json = time_in_json.with_timezone(&Utc);
                 match filter.operator {
                     FilterOperator::Equal => return filter.datetime.unwrap() == time_in_json,
                     FilterOperator::NotEqual => return filter.datetime.unwrap() != time_in_json,
@@ -116,7 +116,7 @@ pub fn filter_date(filter: &DateFilter, value: &Value) -> bool {
     filter.operator == FilterOperator::Empty
 }
 
-pub fn filter_date_time(filter: &DateFilter, time: &DateTime<UTC>) -> bool {
+pub fn filter_date_time(filter: &DateFilter, time: &DateTime<Utc>) -> bool {
     match filter.operator {
         FilterOperator::Equal => return &filter.datetime.unwrap() == time,
         FilterOperator::NotEqual => return &filter.datetime.unwrap() != time,
@@ -190,8 +190,8 @@ mod tests {
     fn date_filtering() {
         let json = get_task();
 
-        let exact_date = UTC.ymd(2017, 6, 8).and_hms_milli(17, 45, 1, 123);
-        let parsed = DateTime::parse_from_rfc3339("2017-06-08T18:45:01.123+01:00").unwrap().with_timezone(&UTC);
+        let exact_date = Utc.ymd(2017, 6, 8).and_hms_milli(17, 45, 1, 123);
+        let parsed = DateTime::parse_from_rfc3339("2017-06-08T18:45:01.123+01:00").unwrap().with_timezone(&Utc);
         assert_eq!(exact_date, parsed);
 
         assert!(DateFilter::new(FilterOperator::Equal, Some(exact_date.clone()), "created").test(&json));

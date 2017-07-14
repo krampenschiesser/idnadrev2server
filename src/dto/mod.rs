@@ -18,6 +18,9 @@ use std::time::Instant;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
+pub struct RepoId(Uuid);
+pub struct FileId(Uuid);
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct AccessToken {
     pub id: Uuid,
@@ -245,19 +248,30 @@ impl File {
     }
 }
 
-use iron::{Request,IronResult};
-use ironext::FromReq;
+use iron::{Request, IronResult, IronError, status};
+use ironext::{FromReq, StringError};
 
 impl FromReq<AccessToken> for AccessToken {
     fn from_req(req: &Request) -> IronResult<Self> {
+
+        if let Some(token_str_bytes) =req.headers.get_raw("token"){
+            
+        }
+
         match req.headers.get_raw("token") {
-            Some(token_str) => {
-                match Uuid::parse_str(token_str) {
-                    Ok(id) => Ok(AccessToken { id }),
-                    Err(_) => Err(format!("Could not parse Uuid {}", token_str))
+            Some(token_str_bytes) => {
+                let token_str = ::std::str::from_utf8(&token_str_bytes[0]);
+                match token_str {
+                    Ok(str) => {
+                        match Uuid::parse_str(str) {
+                            Ok(id) => Ok(AccessToken { id }),
+                            Err(_) => Err(IronError::new(StringError::new(format!("Could not parse Uuid {}", str)), status::BadRequest))
+                        }
+                    }
+                    Err(e) => Err(IronError::new(StringError::new("Invalid utf8 string in token detected"), status::BadRequest))
                 }
             }
-            None => Err("No token set in header".to_string())
+            None => Err(IronError::new(StringError::new("No token set in header"), status::BadRequest))
         }
     }
 }
@@ -307,6 +321,11 @@ impl Page {
     }
 }
 
+impl From<Uuid> for RepoId {
+    fn from(_: T) -> Self {
+
+    }
+}
 
 #[cfg(test)]
 mod tests {
