@@ -4,7 +4,15 @@ use std::fmt::{Debug, Display, Result, Formatter};
 use std::error::Error;
 
 pub trait FromReq<T>: Sized {
-    fn from_req(req: &Request) -> IronResult<Self>;
+    fn from_req(req: &Request) -> IronResult<T>;
+}
+
+pub trait FromMutReq<T>: Sized {
+    fn from_req(req: &mut Request) -> IronResult<T>;
+}
+
+pub trait FromPostReq<T>: Sized {
+    fn from_post_req(req: &mut Request) -> IronResult<T>;
 }
 
 #[derive(Debug)]

@@ -14,11 +14,14 @@ use search::SearchCache;
 use crypt::CryptoIfc;
 use std::sync::RwLock;
 use dto::AccessToken;
+use ironext::{FromMutReq, StringError};
+use iron::prelude::*;
+use iron::status;
+use persistent::Read;
 
 pub struct GlobalState {
     crypt_actor: CryptoActor,
     search_cache: SearchCache,
-
 }
 
 pub struct UiState {
@@ -44,7 +47,7 @@ impl UiState {
             let ref o = self.hash.read().unwrap();
             if o.value.is_some() {
                 let str = o.value.clone().unwrap();
-                return Ok(str)
+                return Ok(str);
             }
         }
 
@@ -77,6 +80,14 @@ impl GlobalState {
 
     pub fn check_token(&self, repo: &Uuid, token: &AccessToken) -> bool {
         self.crypt_actor.check_token(repo, token)
+    }
+
+    pub fn from_req_asref<'a>(req: &'a mut Request) -> IronResult<&'a Self> {
+        let r = req.get::<Read<GlobalState>>();
+        match r {
+            Ok(state) => Ok(state.as_ref()),
+            Err(_) => Err(IronError::new(StringError::new("No state present"),status::InternalServerError))
+        }
     }
 }
 

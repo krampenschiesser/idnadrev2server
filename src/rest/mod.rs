@@ -202,9 +202,8 @@ pub fn list_files(req: &mut Request) -> IronResult<Response>{
 //        SearchParam::new()
 //    };
     let token = AccessToken::from_req(&req)?;
-    let bla: String = req.extensions.get::<Router>();
-    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id");
-    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
+    let repo_id = RepoId::from_req(req)?;
+    let state = GlobalState::from_req_asref(req)?;
 
     if state.check_token(&repo_id, &token) {
         let page = list_files_internal(search, &repo_id, &token, state.inner());
@@ -239,7 +238,7 @@ pub fn list_repositories(req: &mut Request) -> IronResult<Response> {
 
 //#[post("/repo", data = "<create_repo>")]
 pub fn create_repository(req: &mut Request) -> IronResult<Response> {
-    let create_repo: CreateRepository = req.get::<::bodyparser::Struct<CreateRepository>>();
+    let create_repo: CreateRepository = req.get<::bodyparser::Struct<CreateRepository>>();
 
     let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
     info!("#create_repository");
@@ -345,7 +344,7 @@ mod test {
     use tempdir::TempDir;
     use state::GlobalState;
     use dto::*;
-    use chrono::{DateTime, UTC};
+    use chrono::{DateTime, Utc};
 
     use spectral::prelude::*;
 

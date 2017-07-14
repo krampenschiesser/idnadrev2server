@@ -19,6 +19,7 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 pub struct RepoId(Uuid);
+
 pub struct FileId(Uuid);
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
@@ -253,10 +254,7 @@ use ironext::{FromReq, StringError};
 
 impl FromReq<AccessToken> for AccessToken {
     fn from_req(req: &Request) -> IronResult<Self> {
-
-        if let Some(token_str_bytes) =req.headers.get_raw("token"){
-            
-        }
+        if let Some(token_str_bytes) = req.headers.get_raw("token") {}
 
         match req.headers.get_raw("token") {
             Some(token_str_bytes) => {
@@ -321,9 +319,26 @@ impl Page {
     }
 }
 
-impl From<Uuid> for RepoId {
-    fn from(_: T) -> Self {
+impl FromReq<RepoId> for RepoId {
+    fn from_req(req: &Request) -> IronResult<Self> {
+        use router::Router;
 
+        let id_str = req.extensions.get::<Router>()?.find("repo_id");
+        Ok(RepoId(Uuid::from_str(id_str)))
+    }
+}
+
+impl From<Uuid> for RepoId {
+    fn from(id: Uuid) -> Self {
+        let r = RepoId(id);
+        r
+    }
+}
+
+impl From<Uuid> for FileId {
+    fn from(id: Uuid) -> Self {
+        let r = FileId(id);
+        r
     }
 }
 
