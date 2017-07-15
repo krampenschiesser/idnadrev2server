@@ -238,9 +238,9 @@ pub fn list_repositories(req: &mut Request) -> IronResult<Response> {
 
 //#[post("/repo", data = "<create_repo>")]
 pub fn create_repository(req: &mut Request) -> IronResult<Response> {
-    let create_repo: CreateRepository = req.get<::bodyparser::Struct<CreateRepository>>();
+    let create_repo = CreateRepository::from_req(req)?;
+    let state = GlobalState::from_req_asref(req)?;
 
-    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
     info!("#create_repository");
     let c: &CryptoActor = state.crypt();
     let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncryptionType::RingChachaPoly1305);
@@ -257,8 +257,8 @@ pub fn create_repository(req: &mut Request) -> IronResult<Response> {
 
 //#[post("/repo/<repo_id>", data = "<open>")]
 pub fn open_repository(req: &mut Request) -> IronResult<Response> {
-    let open: OpenRepository = req.get::<::bodyparser::Struct<OpenRepository>>();
-    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id")?;
+    let open = OpenRepository ::from_req(req)?;
+    let repo_id = RepoId::from_req(req)?;
     let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
 
     info!("#open_repository");
@@ -276,10 +276,10 @@ pub fn open_repository(req: &mut Request) -> IronResult<Response> {
 
 //#[post("/repo/<repo_id>/file", data = "<file>")]
 pub fn create_file(req: &mut Request) -> IronResult<Response> {
-    let token = AccessToken::try_from(req)?;
-    let file: File = req.get::<::bodyparser::Struct<File>>();
-    let repo_id: Uuid = req.extensions.get::<Router>()?.find("repo_id")?;
-    let state = req.get::<Read<GlobalState>>().unwrap().as_ref();
+    let token = AccessToken::from_req(req)?;
+    let file = File::from_req(req)?;
+    let repo_id = RepoId::from_req(req)?;
+    let state = GlobalState::from_req_asref(req)?;
 
     info!("#create_file");
     let file = file.into_inner();

@@ -342,6 +342,39 @@ impl From<Uuid> for FileId {
     }
 }
 
+impl FromReq<CreateRepository> for CreateRepository {
+    fn from_req(req: &Request) -> IronResult<CreateRepository> {
+        get_json_body(req)
+    }
+}
+impl FromReq<OpenRepository> for OpenRepository{
+    fn from_req(req: &Request) -> IronResult<OpenRepository> {
+        get_json_body(req)
+    }
+}
+
+impl FromReq<File> for File {
+    fn from_req(req: &Request) -> IronResult<File> {
+        get_json_body(req)
+    }
+}
+
+fn get_json_body<T>(req: &Request) -> IronResult<T> {
+    use std::io::Read;
+    use serde_json::from_str;
+    use serde_json::Error;
+
+    let mut s = String::new();
+    req.body.read_to_string(&mut s);
+
+    let b : Result<T,Error> = from_str(s.as_str());
+    match  b {
+        Ok(cmd) => Ok(cmd),
+        Err(_) => Err(IronError::new(StringError::new("Could not parse input as cmd"),status::BadRequest))
+    }
+
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

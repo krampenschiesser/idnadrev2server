@@ -7,9 +7,9 @@ authors = ["krampenschiesser <krampenschiesser@gmail.com>"]
 serde = "1.0.8"
 serde_json = "1.0.2"
 serde_derive = "1.0.8"
-rayon = "0.7.0"
+rayon = "0.8.2"
 base64 = "0.5.2"
-ring = "0.8.1"
+ring = "0.9.7"
 ring-pwhash = "0.2.0"
 rand = "0.3.15"
 byteorder = { version = "1", features =["std"]}
