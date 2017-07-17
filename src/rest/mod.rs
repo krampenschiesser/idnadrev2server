@@ -188,31 +188,19 @@ use ironext::{FromReq,StringError};
 
 
 pub fn list_files(req: &mut Request) -> IronResult<Response>{
-
     let search = SearchParam::from_req(req)?;
-//    let search = if let Some(query) = request.uri().query() {
-//        match SearchParam::from_query_param(query) {
-//            Err(e) => {
-//                error!("{:?}", e);
-//                return Outcome::failure(Status::BadRequest);
-//            }
-//            Ok(param) => param,
-//        }
-//    } else {
-//        SearchParam::new()
-//    };
     let token = AccessToken::from_req(&req)?;
     let repo_id = RepoId::from_req(req)?;
     let state = GlobalState::from_req_asref(req)?;
 
-    if state.check_token(&repo_id, &token) {
-        let page = list_files_internal(search, &repo_id, &token, state.inner());
-        match to_string(page) {
+    if state.check_token(repo_id.as_ref(), &token) {
+        let page = list_files_internal(search, repo_id.as_ref(), &token, state);
+        match to_string(&page) {
             Ok(str) => Ok(Response::with(str)),
-            Err(e) => Ok(Response::with(status::InternalServerError))
+            Err(e) => Err(IronError::new(StringError::new(format!("Could not serialize page: {}",e)), status::InternalServerError))
         }
     } else {
-        Ok(Response::with((status::Unauthorized, "Token invalid")));
+        Err(IronError::new(StringError::new("Token invalid"), status::Unauthorized))
     }
 }
 
@@ -232,7 +220,7 @@ pub fn list_repositories(req: &mut Request) -> IronResult<Response> {
     };
 
     let response = Response::with((status, body));
-    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000".into()));
     Ok(response)
 }
 
@@ -251,7 +239,7 @@ pub fn create_repository(req: &mut Request) -> IronResult<Response> {
 
 
     let response = Response::with((status, body));
-    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000".into()));
     Ok(response)
 }
 
@@ -263,14 +251,14 @@ pub fn open_repository(req: &mut Request) -> IronResult<Response> {
 
     info!("#open_repository");
     let c: &CryptoActor = state.crypt();
-    let option = c.open_repository(&repo_id, open.user_name.clone(), open.password.clone());
+    let option = c.open_repository(repo_id.as_ref(), open.user_name.clone(), open.password.clone());
     let (body, status) = match option {
         None => ("No result...".to_string(), status::NotFound),
         Some(res) => (to_string(&res).unwrap(), status::Ok),
     };
 
     let response = Response::with((status, body));
-    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000".into()));
     Ok(response)
 }
 
@@ -282,7 +270,7 @@ pub fn create_file(req: &mut Request) -> IronResult<Response> {
     let state = GlobalState::from_req_asref(req)?;
 
     info!("#create_file");
-    let file = file.into_inner();
+    let file = file;
     let repo_id = file.repository;
 
     let (content, header) = file.split_header_content();
@@ -299,7 +287,7 @@ pub fn create_file(req: &mut Request) -> IronResult<Response> {
     };
 
     let response = Response::with((status, body));
-    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000".into()));
     Ok(response)
 }
 

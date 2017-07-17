@@ -322,9 +322,24 @@ impl Page {
 impl FromReq<RepoId> for RepoId {
     fn from_req(req: &Request) -> IronResult<Self> {
         use router::Router;
+        use std::str::FromStr;
 
-        let id_str = req.extensions.get::<Router>()?.find("repo_id");
-        Ok(RepoId(Uuid::from_str(id_str)))
+        if let Some(router) = req.extensions.get::<Router>() {
+            let id_str = router.find("repo_id");
+            let res  = match id_str {
+                Some(id) => Ok(id),
+                None => Err(IronError::new(StringError::new("Missing route parameter 'repo' id"), status::BadRequest))
+            }?;
+
+            let res = Uuid::from_str(res);
+            match res {
+                Ok(id) =>Ok(RepoId(id)),
+                Err(_) => Err(IronError::new(StringError::new("Could not parse give repo id"), status::BadRequest))
+            }
+
+        } else {
+            Err(IronError::new(StringError::new("Iron router not found"), status::InternalServerError))
+        }
     }
 }
 
@@ -342,12 +357,25 @@ impl From<Uuid> for FileId {
     }
 }
 
+impl AsRef<Uuid> for RepoId {
+    fn as_ref(&self) -> &Uuid {
+        &self.0
+    }
+}
+
+impl AsRef<Uuid> for FileId {
+    fn as_ref(&self) -> &Uuid {
+        &self.0
+    }
+}
+
 impl FromReq<CreateRepository> for CreateRepository {
     fn from_req(req: &Request) -> IronResult<CreateRepository> {
         get_json_body(req)
     }
 }
-impl FromReq<OpenRepository> for OpenRepository{
+
+impl FromReq<OpenRepository> for OpenRepository {
     fn from_req(req: &Request) -> IronResult<OpenRepository> {
         get_json_body(req)
     }
@@ -359,7 +387,8 @@ impl FromReq<File> for File {
     }
 }
 
-fn get_json_body<T>(req: &Request) -> IronResult<T> {
+fn get_json_body<T>(req: &Request) -> IronResult<T>
+where T: ::serde::de::DeserializeOwned{
     use std::io::Read;
     use serde_json::from_str;
     use serde_json::Error;
@@ -367,12 +396,11 @@ fn get_json_body<T>(req: &Request) -> IronResult<T> {
     let mut s = String::new();
     req.body.read_to_string(&mut s);
 
-    let b : Result<T,Error> = from_str(s.as_str());
-    match  b {
+    let b: Result<T, Error> = from_str(s.as_str());
+    match b {
         Ok(cmd) => Ok(cmd),
-        Err(_) => Err(IronError::new(StringError::new("Could not parse input as cmd"),status::BadRequest))
+        Err(_) => Err(IronError::new(StringError::new("Could not parse input as cmd"), status::BadRequest))
     }
-
 }
 
 #[cfg(test)]

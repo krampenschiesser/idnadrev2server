@@ -32,8 +32,9 @@ pub fn create_file(req: &mut Request) -> IronResult<Response> {
 
 fn create_response() -> IronResult<Response> {
     let response = Response::with(status::Ok);
-    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000"));
+    let ct = UniCase::new("content-type".into());
+    response.headers.set(AccessControlAllowOrigin::Value("http://localhost:3000".into()));
     response.headers.set(AccessControlAllowMethods(vec![Method::Post]));
-    response.headers.set(AccessControlAllowHeaders(vec![UniCase::new("content-type")]));
+    response.headers.set(AccessControlAllowHeaders(vec![ct]));
     Ok(response)
 }
