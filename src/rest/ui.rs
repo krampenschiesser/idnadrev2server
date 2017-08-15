@@ -20,9 +20,9 @@ pub fn index(req: &mut Request) -> Result<Response, HttpError> {
 
 fn read_file_string(path: &PathBuf) -> Result<String, ::std::io::Error> {
     use std::fs::File;
-    use std::io::{ErrorKind, Error};
+    use std::io::{ErrorKind, Error, Read};
 
-    let file = File::open(path);
+    let mut file = File::open(path)?;
     let mut val = String::new();
     match file.read_to_string(&mut val) {
         Ok(_) => Ok(val),
@@ -33,34 +33,35 @@ fn read_file_string(path: &PathBuf) -> Result<String, ::std::io::Error> {
 pub fn manifest(req: &mut Request) -> Result<Response, HttpError> {
     use ::http::status;
     use ::http::header;
-    let ui_state: &UiState = req.get_state().unwrap();
+    let ui_state = UiState::from_req_as_ref(req)?;
 
     let hash = ui_state.compute_hash();
     let status = if hash.is_ok() { status::OK.into() } else { status::INTERNAL_SERVER_ERROR };
 
     let body = if hash.is_ok() { hash.unwrap() } else { format!("{}", hash.err().unwrap()) };
 
-    let mut b = Response::builder();
-    b.status(status, body.as_str().into());
-    b.header(header::CONTENT_TYPE, "Text/CacheManifest");
-    Ok(b.build())
+    let r = Response::builder()
+        .status(status)
+        .header_str_value(header::CONTENT_TYPE, "Text/CacheManifest".as_ref())?
+        .body(body.as_str().into())
+        .build()?;
+    Ok(r)
 }
 
 //#[get("/static/<file..>", rank = 9)]
 pub fn files(req: &mut Request) -> Result<Response, HttpError> {
-    let ui_state: &UiState = req.get_state().unwrap();
-    let ref file = req.extensions.get::<Router>()
-        .unwrap().find("file_name").unwrap_or("/");
+    let ui_state = UiState::from_req_as_ref(req)?;
+    let file = req.param("file_name").unwrap_or("/");
 
     let path = ui_state.ui_dir.join("static").join(file);
-    let result = read_file_string(path)?;
+    let result = read_file_string(&path)?;
     Ok(result.into())
 }
 
 fn read_single_file(name: &str, req: &mut Request) -> Result<Response, HttpError> {
-    let ui_state: &UiState = req.get_state().unwrap();
+    let ui_state = UiState::from_req_as_ref(req)?;
     let path = ui_state.ui_dir.join(name);
-    let result = read_file_string(path)?;
+    let result = read_file_string(&path)?;
     Ok(result.into())
 }
 
@@ -83,5 +84,6 @@ pub fn index_html(req: &mut Request) -> Result<Response, HttpError> {
 //    NamedFile::open(ui_dir.0.join("index.html")).ok()
 //}
 pub fn any(_: &mut Request) -> Result<Response, HttpError> {
-    Ok(Response::moved_permanent("/"))
+    let response = Response::moved_permanent("/".into())?;
+    Ok(response)
 }

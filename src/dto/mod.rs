@@ -13,10 +13,10 @@ use serde_json;
 use crypt::{FileHeader, EncryptedFile};
 use crypt::{RepoHeader, Repository};
 use std::time::Instant;
-
-
 use std::fmt::{Display, Formatter};
 use std::fmt;
+
+use rest_in_rust::prelude::*;
 
 pub struct RepoId(Uuid);
 
@@ -249,11 +249,8 @@ impl File {
     }
 }
 
-use iron::{Request, IronResult, IronError, status};
-use ironext::{FromReq, StringError};
-
-impl FromReq<AccessToken> for AccessToken {
-    fn from_req(req: &Request) -> IronResult<Self> {
+impl FromRequest for AccessToken {
+    fn from_req(req: &mut Request) -> Result<Self, HttpError> {
         if let Some(token_str_bytes) = req.headers.get_raw("token") {}
 
         match req.headers.get_raw("token") {
@@ -263,13 +260,13 @@ impl FromReq<AccessToken> for AccessToken {
                     Ok(str) => {
                         match Uuid::parse_str(str) {
                             Ok(id) => Ok(AccessToken { id }),
-                            Err(_) => Err(IronError::new(StringError::new(format!("Could not parse Uuid {}", str)), status::BadRequest))
+                            Err(_) => Err(HttpError::bad_request(format!("Could not parse Uuid {}", str)))
                         }
                     }
-                    Err(e) => Err(IronError::new(StringError::new("Invalid utf8 string in token detected"), status::BadRequest))
+                    Err(e) => Err(HttpError::bad_request("Invalid utf8 string in token detected"))
                 }
             }
-            None => Err(IronError::new(StringError::new("No token set in header"), status::BadRequest))
+            None => Err(HttpError::bad_request("No token set in header"))
         }
     }
 }
@@ -319,26 +316,17 @@ impl Page {
     }
 }
 
-impl FromReq<RepoId> for RepoId {
-    fn from_req(req: &Request) -> IronResult<Self> {
-        use router::Router;
-        use std::str::FromStr;
+impl FromRequest for RepoId {
+    fn from_req(req: &mut Request) -> Result<Self, HttpError> {
+        let res = match req.param("repo_id") {
+            Some(id) => Ok(id),
+            None => Err(HttpError::bad_request("Missing route parameter 'repo' id"))
+        }?;
 
-        if let Some(router) = req.extensions.get::<Router>() {
-            let id_str = router.find("repo_id");
-            let res  = match id_str {
-                Some(id) => Ok(id),
-                None => Err(IronError::new(StringError::new("Missing route parameter 'repo' id"), status::BadRequest))
-            }?;
-
-            let res = Uuid::from_str(res);
-            match res {
-                Ok(id) =>Ok(RepoId(id)),
-                Err(_) => Err(IronError::new(StringError::new("Could not parse give repo id"), status::BadRequest))
-            }
-
-        } else {
-            Err(IronError::new(StringError::new("Iron router not found"), status::InternalServerError))
+        let res = Uuid::from_str(res);
+        match res {
+            Ok(id) => Ok(RepoId(id)),
+            Err(_) => Err(HttpError::bad_request("Could not parse give repo id"))
         }
     }
 }
@@ -369,26 +357,26 @@ impl AsRef<Uuid> for FileId {
     }
 }
 
-impl FromReq<CreateRepository> for CreateRepository {
-    fn from_req(req: &Request) -> IronResult<CreateRepository> {
+impl FromRequest for CreateRepository {
+    fn from_req(req: &mut Request) -> Result<Self, HttpError> {
         get_json_body(req)
     }
 }
 
-impl FromReq<OpenRepository> for OpenRepository {
-    fn from_req(req: &Request) -> IronResult<OpenRepository> {
+impl FromRequest for OpenRepository {
+    fn from_req(req: &mut Request) -> Result<Self, HttpError> {
         get_json_body(req)
     }
 }
 
-impl FromReq<File> for File {
-    fn from_req(req: &Request) -> IronResult<File> {
+impl FromRequest for File {
+    fn from_req(req: &mut Request) -> Result<Self, HttpError> {
         get_json_body(req)
     }
 }
 
-fn get_json_body<T>(req: &Request) -> IronResult<T>
-where T: ::serde::de::DeserializeOwned{
+fn get_json_body<T>(req: &Request) -> Result<T, HttpError>
+    where T: ::serde::de::DeserializeOwned {
     use std::io::Read;
     use serde_json::from_str;
     use serde_json::Error;
@@ -399,7 +387,7 @@ where T: ::serde::de::DeserializeOwned{
     let b: Result<T, Error> = from_str(s.as_str());
     match b {
         Ok(cmd) => Ok(cmd),
-        Err(_) => Err(IronError::new(StringError::new("Could not parse input as cmd"), status::BadRequest))
+        Err(_) => Err(HttpError::bad_request("Could not parse input as cmd"))
     }
 }
 

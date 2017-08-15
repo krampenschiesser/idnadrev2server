@@ -13,6 +13,8 @@ use std::fmt::Debug;
 use super::filter::{filter_text, filter_date};
 use uuid::Uuid;
 
+use rest_in_rust::prelude::*;
+
 pub trait SearchFilter: Debug {
     fn test(&self, value: &Value) -> bool;
 
@@ -355,10 +357,9 @@ impl SearchParam {
     }
 }
 
-use ironext::FromReq;
 
-impl FromReq<SearchParam> for SearchParam {
-    fn from_req(req: &::iron::Request) -> ::iron::IronResult<Self> {
+impl FromRequest for SearchParam {
+    fn from_req(req: &mut Request) -> Result<Self, HttpError> {
         Ok(SearchParam::new())
     }
 }

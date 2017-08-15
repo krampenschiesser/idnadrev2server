@@ -14,10 +14,8 @@ use search::SearchCache;
 use crypt::CryptoIfc;
 use std::sync::RwLock;
 use dto::AccessToken;
-use ironext::{FromMutReq, StringError};
-use iron::prelude::*;
-use iron::status;
-use persistent::Read;
+
+use rest_in_rust::prelude::*;
 
 pub struct GlobalState {
     crypt_actor: CryptoActor,
@@ -63,6 +61,17 @@ impl UiState {
     }
 }
 
+
+impl<'a> FromRequestAsRef<'a> for UiState {
+    fn from_req_as_ref(req: &'a mut Request) -> Result<&'a Self, HttpError> {
+        let state: Option<&UiState> = req.get_state();
+        match state {
+            Some(state) => Ok(state),
+            None => Err("No UI state present".into())
+        }
+    }
+}
+
 impl GlobalState {
     pub fn new(folders: Vec<PathBuf>) -> Result<Self, CryptError> {
         let crypt = CryptoActor::new(folders)?;
@@ -81,20 +90,16 @@ impl GlobalState {
     pub fn check_token(&self, repo: &Uuid, token: &AccessToken) -> bool {
         self.crypt_actor.check_token(repo, token)
     }
-
-    pub fn from_req_asref<'a>(req: &'a mut Request) -> IronResult<&'a Self> {
-        let r = req.get::<Read<GlobalState>>();
-        match r {
-            Ok(state) => Ok(state.as_ref()),
-            Err(_) => Err(IronError::new(StringError::new("No state present"),status::InternalServerError))
-        }
-    }
 }
 
-use iron::typemap::Key;
-
-impl Key for GlobalState {
-    type Value = GlobalState;
+impl<'a> FromRequestAsRef<'a> for GlobalState {
+    fn from_req_as_ref(req: &'a mut Request) -> Result<&'a Self, HttpError> {
+        let state: Option<&GlobalState> = req.get_state();
+        match state {
+            Some(state) => Ok(state),
+            None => Err("No global state present".into())
+        }
+    }
 }
 
 
