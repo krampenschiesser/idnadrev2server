@@ -31,23 +31,24 @@ fn read_file_string(path: &PathBuf) -> Result<String, ::std::io::Error> {
 }
 
 pub fn manifest(req: &mut Request) -> Result<Response, HttpError> {
-    use iron::headers::ContentType;
-
-    let ui_state = req.get::<Read<UiState>>().unwrap().as_ref();
+    use ::http::status;
+    use ::http::header;
+    let ui_state: &UiState = req.get_state().unwrap();
 
     let hash = ui_state.compute_hash();
-    let status = if hash.is_ok() { status::Ok } else { status::InternalServerError };
+    let status = if hash.is_ok() { status::OK.into() } else { status::INTERNAL_SERVER_ERROR };
 
     let body = if hash.is_ok() { hash.unwrap() } else { format!("{}", hash.err().unwrap()) };
 
-    let mut response = Response::with((status, body));
-    response.headers.set(ContentType(mime!(Text/CacheManifest)));
-    Ok(response)
+    let mut b = Response::builder();
+    b.status(status, body.as_str().into());
+    b.header(header::CONTENT_TYPE, "Text/CacheManifest");
+    Ok(b.build())
 }
 
 //#[get("/static/<file..>", rank = 9)]
 pub fn files(req: &mut Request) -> Result<Response, HttpError> {
-    let ui_state = req.get::<Read<UiState>>().unwrap().as_ref();
+    let ui_state: &UiState = req.get_state().unwrap();
     let ref file = req.extensions.get::<Router>()
         .unwrap().find("file_name").unwrap_or("/");
 
@@ -57,7 +58,7 @@ pub fn files(req: &mut Request) -> Result<Response, HttpError> {
 }
 
 fn read_single_file(name: &str, req: &mut Request) -> Result<Response, HttpError> {
-    let ui_state = req.get::<Read<UiState>>().unwrap().as_ref();
+    let ui_state: &UiState = req.get_state().unwrap();
     let path = ui_state.ui_dir.join(name);
     let result = read_file_string(path)?;
     Ok(result.into())
@@ -82,6 +83,5 @@ pub fn index_html(req: &mut Request) -> Result<Response, HttpError> {
 //    NamedFile::open(ui_dir.0.join("index.html")).ok()
 //}
 pub fn any(_: &mut Request) -> Result<Response, HttpError> {
-    use iron::modifiers::Redirect;
-    Ok(Response::with((status::Found, Redirect("/"))))
+    Ok(Response::moved_permanent("/"))
 }

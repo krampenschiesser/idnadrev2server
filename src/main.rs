@@ -34,6 +34,7 @@ extern crate thread_local;
 extern crate rayon;
 extern crate sha1;
 extern crate rest_in_rust;
+extern crate http;
 
 #[cfg(test)]
 extern crate spectral;
@@ -49,7 +50,7 @@ mod state;
 mod actor;
 
 use std::sync::{Arc, RwLock};
-use std::sync::mpsc::{channel};
+use std::sync::mpsc::channel;
 use std::path::{PathBuf, Path};
 use std::thread;
 use dto::*;
@@ -83,12 +84,12 @@ fn main() {
     router.get("/static/*file_name", rest::ui::files);
     router.get("/*any", rest::ui::any);
 
-//    #[cfg(debug_assertions)]
-//    {
-//        router.post("/repo", rest::cors::create_repository, "cors_create_repo");
-//        router.post("/repo/:repo_id", rest::cors::open_repo_ping, "cors_open_repo");
-//        router.post("/repo/:repo_id/:file_id", rest::cors::create_file, "cors_create_file");
-//    }
+    //    #[cfg(debug_assertions)]
+    //    {
+    //        router.post("/repo", rest::cors::create_repository, "cors_create_repo");
+    //        router.post("/repo/:repo_id", rest::cors::open_repo_ping, "cors_open_repo");
+    //        router.post("/repo/:repo_id/:file_id", rest::cors::create_file, "cors_create_file");
+    //    }
 
 
     let state = GlobalState::new(Vec::new()).unwrap();

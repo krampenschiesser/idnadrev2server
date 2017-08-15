@@ -26,6 +26,7 @@ sha1 = "0.2.0"
 
 reqwest = "0.7.1"
 rest_in_rust = {git = "https://github.com/krampenschiesser/rest_in_rust"}
+http = { git = 'https://github.com/carllerche/http' }
 
 [dev-dependencies]
 spectral = "0.6.0"
