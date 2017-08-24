@@ -185,14 +185,14 @@ use http::header;
 
 pub fn list_files(req: &mut Request) -> Result<Response, HttpError> {
     let search = SearchParam::from_req(req)?;
-    let token = AccessToken::from_req(&req)?;
+    let token = AccessToken::from_req(req)?;
     let repo_id = RepoId::from_req(req)?;
     let state = GlobalState::from_req_as_ref(req)?;
 
     if state.check_token(repo_id.as_ref(), &token) {
         let page = list_files_internal(search, repo_id.as_ref(), &token, state);
         match to_string(&page) {
-            Ok(str) => Ok(Response::with(str)),
+            Ok(str) => Ok(str.into()),
             Err(e) => Err(format!("Could not serialize page: {}", e).into())
         }
     } else {
@@ -215,17 +215,17 @@ pub fn list_repositories(req: &mut Request) -> Result<Response, HttpError> {
         Some(vec) => (to_string(&vec).unwrap(), status::OK),
     };
 
-    let mut b = Response::builder();
-    b.status(status);
-    b.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into());
-    b.body(body.into());
-    Ok(b.build())
+    Response::builder()
+        .status(status)
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into())
+        .body(body.into())
+        .build()
 }
 
 //#[post("/repo", data = "<create_repo>")]
 pub fn create_repository(req: &mut Request) -> Result<Response, HttpError> {
     let create_repo = CreateRepository::from_req(req)?;
-    let state = GlobalState::from_req_asref(req)?;
+    let state = GlobalState::from_req_as_ref(req)?;
 
     info!("#create_repository");
     let c: &CryptoActor = state.crypt();
@@ -235,11 +235,11 @@ pub fn create_repository(req: &mut Request) -> Result<Response, HttpError> {
         Some(res) => (to_string(&res).unwrap(), status::OK),
     };
 
-    let mut b = Response::builder();
-    b.status(status);
-    b.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into());
-    b.body(body.into());
-    Ok(b.build())
+    Response::builder()
+        .status(status)
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into())
+        .body(body.into())
+        .build()
 }
 
 //#[post("/repo/<repo_id>", data = "<open>")]
@@ -256,19 +256,21 @@ pub fn open_repository(req: &mut Request) -> Result<Response, HttpError> {
         Some(res) => (to_string(&res).unwrap(), status::OK),
     };
 
-    let mut b = Response::builder();
-    b.status(status);
-    b.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into());
-    b.body(body.into());
-    Ok(b.build())
+    Response::builder()
+        .status(status)
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into())
+        .body(body.into())
+        .build()
 }
 
 //#[post("/repo/<repo_id>/file", data = "<file>")]
 pub fn create_file(req: &mut Request) -> Result<Response, HttpError> {
+    use std::error::Error;
+
     let token = AccessToken::from_req(req)?;
     let file = File::from_req(req)?;
     let repo_id = RepoId::from_req(req)?;
-    let state = GlobalState::from_req_asref(req)?;
+    let state = GlobalState::from_req_as_ref(req)?;
 
     info!("#create_file");
     let file = file;
@@ -277,7 +279,7 @@ pub fn create_file(req: &mut Request) -> Result<Response, HttpError> {
     let (content, header) = file.split_header_content();
     let header = match header {
         Ok(h) => h,
-        Err(e) => return Ok(Response::with(status::BAD_REQUEST))
+        Err(e) => return Err(HttpError::bad_request(e.description()))
     };
 
     let c: &CryptoActor = state.crypt();

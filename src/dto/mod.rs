@@ -318,6 +318,8 @@ impl Page {
 
 impl FromRequest for RepoId {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
+        use std::str::FromStr;
+
         let res = match req.param("repo_id") {
             Some(id) => Ok(id),
             None => Err(HttpError::bad_request("Missing route parameter 'repo' id"))
@@ -382,7 +384,7 @@ fn get_json_body<T>(req: &Request) -> Result<T, HttpError>
     use serde_json::Error;
 
     let mut s = String::new();
-    req.body.read_to_string(&mut s);
+    req.body().read_to_string(&mut s);
 
     let b: Result<T, Error> = from_str(s.as_str());
     match b {
