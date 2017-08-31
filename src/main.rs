@@ -61,7 +61,7 @@ use crypt::actor::communication::{CryptResponse, CryptCmd};
 #[derive(Debug)]
 pub struct UiDir(PathBuf);
 
-use rest_in_rust::prelude::*;
+use rest_in_rust::*;
 
 fn main() {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
@@ -99,5 +99,5 @@ fn main() {
     let s = Server::new(addr, router);
     s.add_state(state);
     s.add_state(uidir);
-    s.start_http_blocking().unwrap();
+    s.start_http();
 }

@@ -13,7 +13,7 @@ use std::fmt::Debug;
 use super::filter::{filter_text, filter_date};
 use uuid::Uuid;
 
-use rest_in_rust::prelude::*;
+use rest_in_rust::*;
 
 pub trait SearchFilter: Debug {
     fn test(&self, value: &Value) -> bool;

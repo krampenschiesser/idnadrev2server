@@ -15,7 +15,7 @@ use crypt::CryptoIfc;
 use std::sync::RwLock;
 use dto::AccessToken;
 
-use rest_in_rust::prelude::*;
+use rest_in_rust::*;
 
 pub struct GlobalState {
     crypt_actor: CryptoActor,

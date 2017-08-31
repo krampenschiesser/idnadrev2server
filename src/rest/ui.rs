@@ -11,11 +11,11 @@ use std::io;
 use std::path::{PathBuf, Path};
 use std::io::Cursor;
 use state::UiState;
-use rest_in_rust::prelude::*;
+use rest_in_rust::*;
 
 //#[get("/")]
 pub fn index(req: &mut Request) -> Result<Response, HttpError> {
-    read_single_file("index.html", &mut req)
+    read_single_file("index.html", req)
 }
 
 fn read_file_string(path: &PathBuf) -> Result<String, ::std::io::Error> {
@@ -42,16 +42,18 @@ pub fn manifest(req: &mut Request) -> Result<Response, HttpError> {
 
     let r = Response::builder()
         .status(status)
-        .header_str_value(header::CONTENT_TYPE, "Text/CacheManifest".as_ref())?
-        .body(body.as_str().into())
+        .header_str_value(header::CONTENT_TYPE, "Text/CacheManifest")?
+        .body(body)
         .build()?;
     Ok(r)
 }
 
 //#[get("/static/<file..>", rank = 9)]
 pub fn files(req: &mut Request) -> Result<Response, HttpError> {
+    let file: String = {
+        req.param("file_name").unwrap_or("/")
+    }.into();
     let ui_state = UiState::from_req_as_ref(req)?;
-    let file = req.param("file_name").unwrap_or("/");
 
     let path = ui_state.ui_dir.join("static").join(file);
     let result = read_file_string(&path)?;
@@ -67,23 +69,23 @@ fn read_single_file(name: &str, req: &mut Request) -> Result<Response, HttpError
 
 //#[get("/asset-manifest.json")]
 pub fn asset_mainfest(req: &mut Request) -> Result<Response, HttpError> {
-    read_single_file("asset-manifest.json", &mut req)
+    read_single_file("asset-manifest.json", req)
 }
 
 //#[get("/favicon.ico")]
 pub fn favicon(req: &mut Request) -> Result<Response, HttpError> {
-    read_single_file("favicon.ico", &mut req)
+    read_single_file("favicon.ico", req)
 }
 
 //#[get("/index.html")]
 pub fn index_html(req: &mut Request) -> Result<Response, HttpError> {
-    read_single_file("index.html", &mut req)
+    read_single_file("index.html", req)
 }
 
 //pub fn any(any: PathBuf, ui_dir: State<UiDir>) -> Option<NamedFile> {
 //    NamedFile::open(ui_dir.0.join("index.html")).ok()
 //}
 pub fn any(_: &mut Request) -> Result<Response, HttpError> {
-    let response = Response::moved_permanent("/".into())?;
+    let response = Response::moved_permanent("/")?;
     Ok(response)
 }

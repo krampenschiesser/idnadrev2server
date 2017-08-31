@@ -16,7 +16,7 @@ use std::time::Instant;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
-use rest_in_rust::prelude::*;
+use rest_in_rust::*;
 
 pub struct RepoId(Uuid);
 
@@ -251,19 +251,11 @@ impl File {
 
 impl FromRequest for AccessToken {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
-        if let Some(token_str_bytes) = req.headers.get_raw("token") {}
-
-        match req.headers.get_raw("token") {
-            Some(token_str_bytes) => {
-                let token_str = ::std::str::from_utf8(&token_str_bytes[0]);
-                match token_str {
-                    Ok(str) => {
-                        match Uuid::parse_str(str) {
-                            Ok(id) => Ok(AccessToken { id }),
-                            Err(_) => Err(HttpError::bad_request(format!("Could not parse Uuid {}", str)))
-                        }
-                    }
-                    Err(e) => Err(HttpError::bad_request("Invalid utf8 string in token detected"))
+        match req.header_str("token") {
+            Some(token_str) => {
+                match Uuid::parse_str(token_str) {
+                    Ok(id) => Ok(AccessToken { id }),
+                    Err(_) => Err(HttpError::bad_request(format!("Could not parse Uuid {}", token_str)))
                 }
             }
             None => Err(HttpError::bad_request("No token set in header"))
@@ -361,35 +353,19 @@ impl AsRef<Uuid> for FileId {
 
 impl FromRequest for CreateRepository {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
-        get_json_body(req)
+        req.body().json()
     }
 }
 
 impl FromRequest for OpenRepository {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
-        get_json_body(req)
+        req.body().json()
     }
 }
 
 impl FromRequest for File {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
-        get_json_body(req)
-    }
-}
-
-fn get_json_body<T>(req: &Request) -> Result<T, HttpError>
-    where T: ::serde::de::DeserializeOwned {
-    use std::io::Read;
-    use serde_json::from_str;
-    use serde_json::Error;
-
-    let mut s = String::new();
-    req.body().read_to_string(&mut s);
-
-    let b: Result<T, Error> = from_str(s.as_str());
-    match b {
-        Ok(cmd) => Ok(cmd),
-        Err(_) => Err(HttpError::bad_request("Could not parse input as cmd"))
+        req.body().json()
     }
 }
 

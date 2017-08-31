@@ -164,7 +164,7 @@ use dto::{RepositoryDescriptor, RepositoryDto, AccessToken};
 use serde_json::to_string;
 use std::path::PathBuf;
 
-use rest_in_rust::prelude::*;
+use rest_in_rust::*;
 use http::status;
 use http::header;
 //
@@ -214,11 +214,10 @@ pub fn list_repositories(req: &mut Request) -> Result<Response, HttpError> {
         None => ("No result...".to_string(), status::NOT_FOUND),
         Some(vec) => (to_string(&vec).unwrap(), status::OK),
     };
-
     Response::builder()
         .status(status)
-        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into())
-        .body(body.into())
+        .header_str_value(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000")?
+        .body(body)
         .build()
 }
 
@@ -235,10 +234,11 @@ pub fn create_repository(req: &mut Request) -> Result<Response, HttpError> {
         Some(res) => (to_string(&res).unwrap(), status::OK),
     };
 
+
     Response::builder()
         .status(status)
-        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into())
-        .body(body.into())
+        .header_str_value(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000")?
+        .body(body)
         .build()
 }
 
@@ -258,8 +258,8 @@ pub fn open_repository(req: &mut Request) -> Result<Response, HttpError> {
 
     Response::builder()
         .status(status)
-        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into())
-        .body(body.into())
+        .header_str_value(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000")?
+        .body(body)
         .build()
 }
 
@@ -291,8 +291,8 @@ pub fn create_file(req: &mut Request) -> Result<Response, HttpError> {
 
     Response::builder()
         .status(status)
-        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000".into())
-        .body(body.into())
+        .header_str_value(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:3000")?
+        .body(body)
         .build()
 }
 
