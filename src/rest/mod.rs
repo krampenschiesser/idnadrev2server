@@ -338,30 +338,33 @@ mod test {
     use state::GlobalState;
     use dto::*;
     use chrono::{DateTime, Utc};
+    use rest_in_rust::*;
+    use http::{Uri,Method,Request};
+    use http::request::Builder as RequestBuilder;
 
     use spectral::prelude::*;
 
-    fn setup() -> (TempDir, Rocket) {
+    fn setup() -> (TempDir, ServerTester) {
         let temp = TempDir::new("rest-test").unwrap();
 
         let state = GlobalState::new(vec![temp.path().to_path_buf()]).unwrap();
 
-        let rocket = rocket::ignite()
-            .manage(state)
-            .mount("/rest/v1", routes![
-                super::list_repositories,
-                super::create_repository,
-                super::open_repository,
-                super::create_file,
-                super::any,
-                ])
-            .mount("/rest/v1", vec![
-                Route::new(Get, "/repo/<id>/?:", super::list_files),
-                Route::new(Get, "/repo/<id>", super::list_files),
-                Route::new(Get, "/repo/<id>/<type>/?:", super::list_files),
-                Route::new(Get, "/repo/<id>/<type>", super::list_files),
-            ]);
-        (temp, rocket)
+        let mut router = Router::new();
+        router.get("/rest/v1/", rest::list_repositories);
+        router.post("/rest/v1/repo", rest::create_repository);
+        router.post("/rest/v1/repo/:repo_id", rest::open_repository);
+        router.get("/rest/v1/repo/:repo_id/file", rest::create_file);
+        router.get("/rest/v1/repo/:repo_id", rest::list_files);
+        router.get("/rest/v1/repo/:repo_id/", rest::list_files);
+        router.get("/rest/v1/repo/:repo_id/:type", rest::list_files);
+        router.get("/rest/v1/repo/:repo_id/:type/", rest::list_files);
+
+
+        let addr = "127.0.0.1:8091".parse().unwrap();
+        let s = Server::new(addr, router);
+        s.add_state(state);
+        let tester = s.start_testing();
+        (temp, tester)
     }
 
     fn body_to_json<'de, T>(response: &mut Response) -> T
@@ -404,35 +407,40 @@ mod test {
         body_to_json(&mut response)
     }
 
-    fn post_to_repo<'de, T, B>(suffix: &str, repo_id: &Uuid, token: &AccessToken, body: &B, rocket: &Rocket) -> T
+    fn post_to_repo<'de, T, B>(suffix: &str, repo_id: &Uuid, token: &AccessToken, body: &B, server: &ServerTester) -> T
         where T: ::serde::Deserialize<'de>,
               B: ::serde::Serialize
     {
         use ::serde_json::to_string;
-        let s = to_string(body).unwrap();
 
-        let mut req = MockRequest::new(Post, format!("/rest/v1/repo/{}{}", repo_id, suffix)).body(s);
+        let (key,value) = token.to_header();
+        let s = to_string(body).unwrap();
+        let uri = Uri::from_str(format!("/rest/v1/repo/{}{}", repo_id, suffix)).unwrap();
+
+        let request = RequestBuilder::new().header().uri(uri).method(Method::POST).body(s.into()).unwrap();
+
+        let mut req = MockRequest::new(Post, uri).body(s);
         req.add_header(ContentType::JSON);
         req.add_header(Header::new("token", format!("{}", token.id)));
 
-        let mut response = req.dispatch_with(&rocket);
+        let mut response = req.dispatch_with(&server);
         assert_eq!(Status::Ok, response.status());
         body_to_json(&mut response)
     }
 
-    fn create_open_repo() -> (TempDir, Rocket, Uuid, AccessToken) {
-        let (temp, rocket) = setup();
-        let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &rocket);
+    fn create_open_repo() -> (TempDir, ServerTester, Uuid, AccessToken) {
+        let (temp, server) = setup();
+        let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &server);
         assert_that(&vec).is_empty();
         let cmd = CreateRepository { name: "repo".to_string(), user_name: "none".to_string(), encryption: EncryptionType::RingChachaPoly1305, password: vec![1, 2, 3] };
-        let response: Option<RepositoryDto> = post_ok("/rest/v1/repo", &cmd, &rocket);
-        let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &rocket);
+        let response: Option<RepositoryDto> = post_ok("/rest/v1/repo", &cmd, &server);
+        let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &server);
         assert_that(&vec).has_length(1);
         let repo_id = &vec[0].id;
         let cmd = OpenRepository { user_name: String::new(), password: vec![1, 2, 3] };
-        let response: Option<AccessToken> = post_ok(format!("/rest/v1/repo/{}/", repo_id).as_str(), &cmd, &rocket);
+        let response: Option<AccessToken> = post_ok(format!("/rest/v1/repo/{}/", repo_id).as_str(), &cmd, &server);
         assert!(response.is_some());
-        (temp, rocket, repo_id.clone(), response.unwrap())
+        (temp, server, repo_id.clone(), response.unwrap())
     }
 
     #[test]

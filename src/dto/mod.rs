@@ -267,6 +267,17 @@ impl AccessToken {
     pub fn new() -> Self {
         AccessToken { id: Uuid::new_v4() }
     }
+
+    pub fn to_header(&self) -> (::http::header::HeaderName, ::http::header::HeaderValue) {
+        use std::str::FromStr;
+        use http::header::HeaderName;
+        use http::header::HeaderValue;
+
+        let name = HeaderName::from_str("token").unwrap();
+        let string = format!("{}", self.id.simple());
+        let value = HeaderValue::from_str(string.as_ref()).unwrap();
+        (name,value)
+    }
 }
 
 impl Display for AccessToken {
@@ -353,21 +364,22 @@ impl AsRef<Uuid> for FileId {
 
 impl FromRequest for CreateRepository {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
-        req.body().json()
+        req.body().to_json()
     }
 }
 
 impl FromRequest for OpenRepository {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
-        req.body().json()
+        req.body().to_json()
     }
 }
 
 impl FromRequest for File {
     fn from_req(req: &mut Request) -> Result<Self, HttpError> {
-        req.body().json()
+        req.body().to_json()
     }
 }
+
 
 #[cfg(test)]
 mod tests {
