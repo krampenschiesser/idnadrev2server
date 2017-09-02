@@ -5,8 +5,7 @@ pub use self::searchparam::SearchParam;
 use self::filter::filter_text;
 
 use crypt::{CryptoSender, CryptoIfc };
-use uuid::Uuid;
-use dto::{AccessToken, Page, File,FileHeaderDescriptor};
+use dto::{RepoId,AccessToken, Page, File,FileHeaderDescriptor};
 
 pub struct SearchCache {
     pub crypt_sender: CryptoSender,
@@ -17,12 +16,12 @@ impl SearchCache {
         SearchCache { crypt_sender }
     }
 
-    pub fn search(&self, param: SearchParam, repo_id: &Uuid, token: &AccessToken) -> Page {
+    pub fn search(&self, param: SearchParam, repo_id: &RepoId, token: &AccessToken) -> Page {
         let files = self.get_files(repo_id, token);
         param.filter(files.as_slice())
     }
 
-    fn get_files(&self, repo_id: &Uuid, token: &AccessToken) -> Vec<File> {
+    fn get_files(&self, repo_id: &RepoId, token: &AccessToken) -> Vec<File> {
         if let Some(mut v) = self.crypt_sender.list_repository_files(repo_id, token) {
             let mut retval: Vec<File> = v.iter_mut()
                 .map(|fhd| File::from_descriptor(fhd))

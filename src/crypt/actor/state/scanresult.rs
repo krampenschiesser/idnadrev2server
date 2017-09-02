@@ -16,11 +16,11 @@ use std::sync::mpsc::{channel, Receiver};
 use std::path::PathBuf;
 use uuid::Uuid;
 use std::collections::HashMap;
-
+use dto::{FileId,RepoId};
 
 pub struct ScanResult {
     repositories: Vec<Repository>,
-    files: HashMap<Uuid, (FileHeader, PathBuf)>,
+    files: HashMap<FileId, (FileHeader, PathBuf)>,
     invalid: Vec<(CryptError, PathBuf)>,
     watcher: RecommendedWatcher,
     file_change_receiver: Receiver<DebouncedEvent>,
@@ -47,7 +47,7 @@ impl ScanResult {
         ScanResult { repositories: Vec::new(), files: HashMap::new(), invalid: Vec::new(), watcher: watcher, file_change_receiver: file_change_receiver, folders: folders.clone() }
     }
 
-    pub fn get_repository(&self, id: &Uuid) -> Option<Repository> {
+    pub fn get_repository(&self, id: &RepoId) -> Option<Repository> {
         let result = self.repositories.iter().find(|repo| {
             repo.get_id() == *id
         });
@@ -61,7 +61,7 @@ impl ScanResult {
         &self.repositories
     }
 
-    pub fn get_files(&self) -> &HashMap<Uuid, (FileHeader, PathBuf)> {
+    pub fn get_files(&self) -> &HashMap<FileId, (FileHeader, PathBuf)> {
         &self.files
     }
 
@@ -69,7 +69,7 @@ impl ScanResult {
         self.files.values().find(|t| t.1 == path).map(|t| t.0.clone())
     }
 
-    pub fn get_files_for_repo(&self, repo_id: &Uuid) -> Vec<(FileHeader, PathBuf)> {
+    pub fn get_files_for_repo(&self, repo_id: &RepoId) -> Vec<(FileHeader, PathBuf)> {
         self.files.values().filter(|ref t| t.0.get_repository_id() == *repo_id).map(|e| e.clone()).collect()
     }
 
@@ -77,7 +77,7 @@ impl ScanResult {
         self.files.insert(h.get_id(), (h, p));
     }
 
-    pub fn has_file(&self, id: &Uuid) -> bool {
+    pub fn has_file(&self, id: &FileId) -> bool {
         self.files.contains_key(id)
     }
 
@@ -110,7 +110,7 @@ impl ScanResult {
         }
     }
 
-    pub fn remove_file(&mut self, id: &Uuid) {
+    pub fn remove_file(&mut self, id: &FileId) {
         self.files.remove(id);
     }
 

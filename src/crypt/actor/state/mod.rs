@@ -13,11 +13,12 @@ use super::super::error::CryptError;
 use super::super::util::io::scan;
 use self::repositorystate::RepositoryState;
 use self::scanresult::{ScanResult, CheckRes};
-use dto::AccessToken;
+use dto::{RepoId,FileId,AccessToken};
 
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 use std::path::PathBuf;
+
 
 pub mod repositorystate;
 pub mod scanresult;
@@ -25,7 +26,7 @@ pub mod scanresult;
 
 pub struct State {
     nonces: HashSet<Vec<u8>>,
-    repositories: HashMap<Uuid, RepositoryState>,
+    repositories: HashMap<RepoId, RepositoryState>,
 
     folders: Vec<PathBuf>,
     scan_result: ScanResult,
@@ -40,31 +41,31 @@ impl State {
     pub fn get_scanned_repositories(&self) -> &Vec<Repository> {
         self.scan_result.get_repositories()
     }
-    pub fn get_repositories(&self) -> &HashMap<Uuid, RepositoryState> {
+    pub fn get_repositories(&self) -> &HashMap<RepoId, RepositoryState> {
         &self.repositories
     }
-    pub fn get_repository(&self, id: &Uuid) -> Option<&RepositoryState> {
+    pub fn get_repository(&self, id: &RepoId) -> Option<&RepositoryState> {
         self.repositories.get(id)
     }
 
-    pub fn get_repository_mut(&mut self, id: &Uuid) -> Option<&mut RepositoryState> {
+    pub fn get_repository_mut(&mut self, id: &RepoId) -> Option<&mut RepositoryState> {
         self.repositories.get_mut(id)
     }
 
-    pub fn has_repository(&self, id: &Uuid) -> bool {
+    pub fn has_repository(&self, id: &RepoId) -> bool {
         self.repositories.contains_key(id)
     }
 
     pub fn has_repository_with_name(&self, name: &str) -> bool {
-        self.repositories.values().any(|r|r.get_name() == name) ||
+        self.repositories.values().any(|r| r.get_name() == name) ||
             self.scan_result.has_repository_with_name(name)
     }
 
-    pub fn add_repository_state(&mut self, id: &Uuid, repostate: RepositoryState) {
+    pub fn add_repository_state(&mut self, id: &RepoId, repostate: RepositoryState) {
         self.repositories.insert(id.clone(), repostate);
     }
 
-    pub fn check_token(&mut self, token: &AccessToken, repo_id: &Uuid) -> bool {
+    pub fn check_token(&mut self, token: &AccessToken, repo_id: &RepoId) -> bool {
         let o = self.get_repository_mut(repo_id);
         match o {
             Some(repo) => repo.check_token(token),
@@ -75,7 +76,7 @@ impl State {
         }
     }
 
-    pub fn generate_token(&mut self, repo_id: &Uuid) -> Option<AccessToken> {
+    pub fn generate_token(&mut self, repo_id: &RepoId) -> Option<AccessToken> {
         let mut o = self.repositories.get_mut(repo_id);
         match o {
             None => None,
@@ -83,7 +84,7 @@ impl State {
         }
     }
 
-    pub fn remove_token(&mut self, id: &Uuid, token: &AccessToken) {
+    pub fn remove_token(&mut self, id: &RepoId, token: &AccessToken) {
         let no_tokens = match self.repositories.get_mut(id) {
             None => false,
             Some(ref mut r) => {
@@ -127,15 +128,13 @@ impl State {
         &mut self.scan_result
     }
 
-    pub fn remove_file(&mut self, repo_id: &Uuid, file_id: &Uuid) {
+    pub fn remove_file(&mut self, repo_id: &RepoId, file_id: &FileId) {
         let mut o = self.repositories.get_mut(repo_id);
         match o {
             Some(repo) => {
                 repo.remove_file(file_id);
             }
-            None => {
-
-            }
+            None => {}
         };
         self.scan_result.remove_file(file_id);
     }

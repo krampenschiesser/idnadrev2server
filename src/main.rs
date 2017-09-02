@@ -51,9 +51,7 @@ use std::sync::{Arc, RwLock};
 use std::sync::mpsc::channel;
 use std::path::{PathBuf, Path};
 use std::thread;
-use dto::*;
 use state::GlobalState;
-use crypt::actor::communication::{CryptResponse, CryptCmd};
 
 
 #[derive(Debug)]

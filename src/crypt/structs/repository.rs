@@ -7,9 +7,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use dto::{EncryptionType,PasswordHashType};
+use dto::{RepoId,EncryptionType,PasswordHashType};
 use super::{MainHeader, FileVersion};
-use super::crypto::{HashedPw, DoubleHashedPw, PlainPw};
+use super::crypto::{HashedPw, DoubleHashedPw};
 use super::super::error::{CryptError, ParseError};
 use super::super::util::random_vec;
 use super::super::util::tempfile::TempFile;
@@ -20,6 +20,7 @@ use std::io::{Read, Write, Cursor};
 use uuid::Uuid;
 use byteorder::{WriteBytesExt, LittleEndian};
 use super::serialize::*;
+use dto::PlainPw;
 
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -57,8 +58,8 @@ impl RepoHeader {
     pub fn get_encryption_type(&self) -> &EncryptionType {
         &self.encryption_type
     }
-    pub fn get_id(&self) -> Uuid {
-        self.main_header.id.clone()
+    pub fn get_id(&self) -> RepoId {
+        RepoId::from(self.main_header.id.clone())
     }
 
     pub fn get_additional_data(&self) -> Vec<u8> {
@@ -81,7 +82,7 @@ impl Repository {
         Repository { header: header, hash: checksum, name: name.into(), path: None }
     }
 
-    pub fn get_id(&self) -> Uuid {
+    pub fn get_id(&self) -> RepoId{
         self.header.get_id()
     }
 

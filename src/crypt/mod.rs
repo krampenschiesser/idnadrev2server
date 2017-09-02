@@ -23,8 +23,8 @@ use dto::*;
 
 use std::path::PathBuf;
 use std::thread;
-use uuid::Uuid;
 use std::sync::mpsc::Sender;
+use dto::PlainPw;
 
 pub struct CryptoActor {
     actor_control: ActorControl<CryptCmd, CryptResponse>,
@@ -37,27 +37,27 @@ pub struct CryptoSender {
 pub trait CryptoIfc {
     fn list_repositories(&self) -> Option<Vec<RepositoryDescriptor>>;
 
-    fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken>;
+    fn open_repository(&self, id: &RepoId, user_name: String, pw: PlainPw ) -> Option<AccessToken>;
 
-    fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncryptionType) -> Option<RepositoryDto>;
+    fn create_repository(&self, name: &str, pw: PlainPw , enc_type: EncryptionType) -> Option<RepositoryDto>;
 
-    fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid>;
+    fn close_repository(&self, id: &RepoId, token: &AccessToken) -> Option<RepoId>;
 
-    fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>>;
+    fn list_repository_files(&self, id: &RepoId, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>>;
 
-    fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor>;
+    fn create_new_file(&self, repo_id: &RepoId, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor>;
 
-    fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor>;
+    fn get_file_header(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<FileHeaderDescriptor>;
 
-    fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)>;
+    fn get_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<(FileHeaderDescriptor, Vec<u8>)>;
 
-    fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor>;
+    fn update_header(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str) -> Option<FileHeaderDescriptor>;
 
-    fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor>;
+    fn update_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor>;
 
-    fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor>;
+    fn delete_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32) -> Option<FileDescriptor>;
 
-    fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool;
+    fn check_token(&self, repo_id: &RepoId, token: &AccessToken) -> bool;
 }
 
 impl CryptoActor {
@@ -81,47 +81,47 @@ impl CryptoIfc for CryptoSender {
         list_repositories(&self.sender)
     }
 
-    fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
+    fn open_repository(&self, id: &RepoId, user_name: String, pw: PlainPw) -> Option<AccessToken> {
         open_repository(&self.sender, id, user_name, pw)
     }
 
-    fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncryptionType) -> Option<RepositoryDto> {
+    fn create_repository(&self, name: &str, pw: PlainPw, enc_type: EncryptionType) -> Option<RepositoryDto> {
         create_repository(&self.sender, name, pw, enc_type)
     }
 
-    fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
+    fn close_repository(&self, id: &RepoId, token: &AccessToken) -> Option<RepoId> {
         close_repository(&self.sender, id, token)
     }
 
-    fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
+    fn list_repository_files(&self, id: &RepoId, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
         list_repository_files(&self.sender, id, token)
     }
 
-    fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
+    fn create_new_file(&self, repo_id: &RepoId, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
         create_new_file(&self.sender, repo_id, token, header, content)
     }
 
-    fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
+    fn get_file_header(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<FileHeaderDescriptor> {
         get_file_header(&self.sender, repo_id, token, file_id)
     }
 
-    fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
+    fn get_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
         get_file(&self.sender, repo_id, token, file_id)
     }
 
-    fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+    fn update_header(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
         update_header(&self.sender, repo_id, token, file_id, file_version, header)
     }
 
-    fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+    fn update_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
         update_file(&self.sender, repo_id, token, file_id, file_version, header, content)
     }
 
-    fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+    fn delete_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32) -> Option<FileDescriptor> {
         delete_file(&self.sender, repo_id, token, file_id, file_version)
     }
 
-    fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool {
+    fn check_token(&self, repo_id: &RepoId, token: &AccessToken) -> bool {
         check_token(&self.sender, repo_id, token)
     }
 }
@@ -131,47 +131,47 @@ impl CryptoIfc for CryptoActor {
         list_repositories(&self.actor_control)
     }
 
-    fn open_repository(&self, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
+    fn open_repository(&self, id: &RepoId, user_name: String, pw: PlainPw) -> Option<AccessToken> {
         open_repository(&self.actor_control, id, user_name, pw)
     }
 
-    fn create_repository(&self, name: &str, pw: Vec<u8>, enc_type: EncryptionType) -> Option<RepositoryDto> {
+    fn create_repository(&self, name: &str, pw: PlainPw, enc_type: EncryptionType) -> Option<RepositoryDto> {
         create_repository(&self.actor_control, name, pw, enc_type)
     }
 
-    fn close_repository(&self, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
+    fn close_repository(&self, id: &RepoId, token: &AccessToken) -> Option<RepoId> {
         close_repository(&self.actor_control, id, token)
     }
 
-    fn list_repository_files(&self, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
+    fn list_repository_files(&self, id: &RepoId, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
         list_repository_files(&self.actor_control, id, token)
     }
 
-    fn create_new_file(&self, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
+    fn create_new_file(&self, repo_id: &RepoId, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
         create_new_file(&self.actor_control, repo_id, token, header, content)
     }
 
-    fn get_file_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
+    fn get_file_header(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<FileHeaderDescriptor> {
         get_file_header(&self.actor_control, repo_id, token, file_id)
     }
 
-    fn get_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
+    fn get_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
         get_file(&self.actor_control, repo_id, token, file_id)
     }
 
-    fn update_header(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+    fn update_header(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
         update_header(&self.actor_control, repo_id, token, file_id, file_version, header)
     }
 
-    fn update_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+    fn update_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
         update_file(&self.actor_control, repo_id, token, file_id, file_version, header, content)
     }
 
-    fn delete_file(&self, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+    fn delete_file(&self, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32) -> Option<FileDescriptor> {
         delete_file(&self.actor_control, repo_id, token, file_id, file_version)
     }
 
-    fn check_token(&self, repo_id: &Uuid, token: &AccessToken) -> bool {
+    fn check_token(&self, repo_id: &RepoId, token: &AccessToken) -> bool {
         check_token(&self.actor_control, repo_id, token)
     }
 }
@@ -206,7 +206,7 @@ fn list_repositories<T: SendSync<CryptCmd, CryptResponse>>(send: &T) -> Option<V
     }
 }
 
-fn open_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &Uuid, user_name: String, pw: Vec<u8>) -> Option<AccessToken> {
+fn open_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &RepoId, user_name: String, pw: PlainPw) -> Option<AccessToken> {
     let cmd = CryptCmd::OpenRepository { id: id.clone(), user_name: user_name, pw: pw };
 
     if let Some(response) = send_unwrap(send, cmd) {
@@ -222,7 +222,7 @@ fn open_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &Uuid, us
     }
 }
 
-fn create_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, name: &str, pw: Vec<u8>, enc_type: EncryptionType) -> Option<RepositoryDto> {
+fn create_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, name: &str, pw: PlainPw, enc_type: EncryptionType) -> Option<RepositoryDto> {
     #[cfg(debug_assertions)]
     let scrypt = PasswordHashType::SCrypt { iterations: 4, memory_costs: 4, parallelism: 1 };
     #[cfg(not(debug_assertions))]
@@ -243,7 +243,7 @@ fn create_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, name: &str,
     }
 }
 
-fn close_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &Uuid, token: &AccessToken) -> Option<Uuid> {
+fn close_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &RepoId, token: &AccessToken) -> Option<RepoId> {
     let cmd = CryptCmd::CloseRepository { id: id.clone(), token: token.clone() };
 
     if let Some(response) = send_unwrap(send, cmd) {
@@ -259,7 +259,7 @@ fn close_repository<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &Uuid, t
     }
 }
 
-fn list_repository_files<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &Uuid, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
+fn list_repository_files<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &RepoId, token: &AccessToken) -> Option<Vec<FileHeaderDescriptor>> {
     let cmd = CryptCmd::ListFiles { id: id.clone(), token: token.clone() };
 
     if let Some(response) = send_unwrap(send, cmd) {
@@ -275,7 +275,7 @@ fn list_repository_files<T: SendSync<CryptCmd, CryptResponse>>(send: &T, id: &Uu
     }
 }
 
-fn create_new_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
+fn create_new_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &RepoId, token: &AccessToken, header: String, content: Vec<u8>) -> Option<FileDescriptor> {
     let cmd = CryptCmd::CreateNewFile { token: token.clone(), header: header, repo: repo_id.clone(), content: content };
 
     if let Some(response) = send_unwrap(send, cmd) {
@@ -291,7 +291,7 @@ fn create_new_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uui
     }
 }
 
-fn get_file_header<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<FileHeaderDescriptor> {
+fn get_file_header<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<FileHeaderDescriptor> {
     let cmd = CryptCmd::GetFileHeader { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
 
     if let Some(response) = send_unwrap(send, cmd) {
@@ -307,7 +307,7 @@ fn get_file_header<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uui
     }
 }
 
-fn get_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
+fn get_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &RepoId, token: &AccessToken, file_id: &FileId) -> Option<(FileHeaderDescriptor, Vec<u8>)> {
     let cmd = CryptCmd::GetFile { token: token.clone(), file: FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: 0 } };
 
     if let Some(response) = send_unwrap(send, cmd) {
@@ -323,7 +323,7 @@ fn get_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, toke
     }
 }
 
-fn update_header<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
+fn update_header<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str) -> Option<FileHeaderDescriptor> {
     let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
     let cmd = CryptCmd::UpdateHeader { token: token.clone(), file: desc, header: header.to_string() };
 
@@ -340,7 +340,7 @@ fn update_header<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid,
     }
 }
 
-fn update_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
+fn update_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32, header: &str, content: Vec<u8>) -> Option<FileHeaderDescriptor> {
     let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
     let cmd = CryptCmd::UpdateFile { token: token.clone(), file: desc, header: header.to_string(), content: content };
 
@@ -357,7 +357,7 @@ fn update_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, t
     }
 }
 
-fn delete_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken, file_id: &Uuid, file_version: u32) -> Option<FileDescriptor> {
+fn delete_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &RepoId, token: &AccessToken, file_id: &FileId, file_version: u32) -> Option<FileDescriptor> {
     let desc = FileDescriptor { repo: repo_id.clone(), id: file_id.clone(), version: file_version };
     let cmd = CryptCmd::DeleteFile { token: token.clone(), file: desc };
 
@@ -374,7 +374,7 @@ fn delete_file<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, t
     }
 }
 
-fn check_token<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &Uuid, token: &AccessToken) -> bool {
+fn check_token<T: SendSync<CryptCmd, CryptResponse>>(send: &T, repo_id: &RepoId, token: &AccessToken) -> bool {
     let cmd = CryptCmd::CheckToken { repo: repo_id.clone(), token: token.clone() };
 
     if let Some(response) = send_unwrap(send, cmd) {

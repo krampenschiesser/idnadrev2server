@@ -10,14 +10,14 @@
 use super::communication::{CryptCmd, CryptResponse};
 use dto::*;
 use super::state::State;
-use super::super::structs::{FileVersion};
-use super::super::structs::crypto::{PlainPw, HashedPw};
+use super::super::structs::FileVersion;
 use super::super::structs::repository::{Repository, RepoHeader};
 use super::super::structs::file::{EncryptedFile, FileHeader};
 use super::state::scanresult::ScanResult;
 use super::state::repositorystate::RepositoryState;
 use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
 use super::super::error::{CryptError, ParseError};
+use crypt::structs::crypto::{HashedPw, DoubleHashedPw};
 
 use std::error::Error;
 use uuid::Uuid;
@@ -53,7 +53,7 @@ pub fn handle(cmd: CryptCmd, state: &mut State) -> Result<CryptResponse, String>
 }
 
 
-fn open_repository(id: &Uuid, user_name: &String, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {
+fn open_repository(id: &RepoId, user_name: &String, pw: &[u8], state: &mut State) -> Result<CryptResponse, String> {
     //fixme consider username in token statek
     let pw = PlainPw::new(pw);
 
@@ -69,7 +69,7 @@ fn open_repository(id: &Uuid, user_name: &String, pw: &[u8], state: &mut State) 
             Ok(CryptResponse::RepositoryOpenFailed { id: id.clone() })
         }
     } else {
-        let option = state.get_scan_result().get_repository(id);
+        let option = state.get_scan_result().get_repository(&id);
         match option {
             Some(repo) => {
                 let hashed_key = repo.hash_key(pw);
@@ -109,7 +109,7 @@ fn create_repository(name: &str, pw: &[u8], enc: &EncryptionType, kdf: &Password
     let key = HashedPw::new(pw.clone(), &enc, &kdf, header.get_salt());
 
     let mut repo = Repository::new(name, pw, header);
-    let path = path.join(format!("{}", repo.get_id().clone().simple()));
+    let path = path.join(format!("{}", repo.get_id()));
     repo.set_path(&path);
     let repo = repo;
     let repo_id = repo.get_id().clone();
@@ -120,8 +120,8 @@ fn create_repository(name: &str, pw: &[u8], enc: &EncryptionType, kdf: &Password
             match file_added(&repo.get_path().unwrap(), state) {
                 Ok(CryptResponse::RepositoryChanged(ref id)) => {
                     let repostate = RepositoryState::new(repo, key);
-                    state.add_repository_state(id, repostate);
-                    let token = state.generate_token(id).unwrap();
+                    state.add_repository_state(&id, repostate);
+                    let token = state.generate_token(&id).unwrap();
                     Ok(CryptResponse::RepositoryCreated { token: token, id: id.clone() })
                 }
                 Ok(r) => Ok(CryptResponse::Error(format!("{}", r))),
@@ -148,16 +148,16 @@ fn create_repository_state(pw: HashedPw, repo: Repository, scan_result: &ScanRes
     repo_state
 }
 
-fn close_repository(id: &Uuid, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
+fn close_repository(id: &RepoId, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, id) {
         state.remove_token(id, token);
-        Ok(CryptResponse::RepositoryIsClosed { id: id.clone() })
+        Ok(CryptResponse::RepositoryIsClosed { id: RepoId::from(id.clone()) })
     } else {
         invalid_token("Trying to close a repository", token)
     }
 }
 
-fn check_token(repo: &Uuid, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
+fn check_token(repo: &RepoId, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, repo) {
         Ok(CryptResponse::TokenValid)
     } else {
@@ -165,7 +165,7 @@ fn check_token(repo: &Uuid, token: &AccessToken, state: &mut State) -> Result<Cr
     }
 }
 
-fn list_files(id: &Uuid, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
+fn list_files(id: &RepoId, token: &AccessToken, state: &mut State) -> Result<CryptResponse, String> {
     if state.check_token(token, id) {
         let repo = state.get_repository(id).unwrap();//unwrap because check_token returns false on no repo
         let files: Vec<FileHeaderDescriptor> = repo.get_file_headers();
@@ -183,7 +183,7 @@ fn list_repositories(state: &mut State) -> Result<CryptResponse, String> {
 }
 
 
-fn create_new_file(token: &AccessToken, header: &String, content: &Vec<u8>, repo_id: &Uuid, state: &mut State) -> Result<CryptResponse, String> {
+fn create_new_file(token: &AccessToken, header: &String, content: &Vec<u8>, repo_id: &RepoId, state: &mut State) -> Result<CryptResponse, String> {
     let result = if state.check_token(token, repo_id) {
         let repostate = state.get_repository(repo_id).unwrap();
         let ref repo = repostate.get_repo();
@@ -191,7 +191,7 @@ fn create_new_file(token: &AccessToken, header: &String, content: &Vec<u8>, repo
         let file_id = fh.get_id();
         let mut file = EncryptedFile::new(fh, header);
         file.set_content(content);
-        let file_path = repo.get_folder().unwrap().join(format!("{}", file_id.simple()));
+        let file_path = repo.get_folder().unwrap().join(format!("{}", file_id));
         file.set_path(&file_path);
         file.save(repostate.get_key());
         info!("Successfully created new file {} in {}", file_id, path_to_str(&file_path));
@@ -282,7 +282,7 @@ fn delete_file(token: &AccessToken, file_descriptor: &FileDescriptor, state: &mu
                 Err(CryptResponse::NoSuchFile(file_descriptor.clone()))
             }
         } else {
-            Err(CryptResponse::NoSuchRepository { id: repo_id.clone() })
+            Err(CryptResponse::NoSuchRepository { id: RepoId::from(repo_id.clone()) })
         }
     } else {
         Err(invalid_token_response_only("Trying to update file with invalid token", token))
@@ -304,7 +304,7 @@ fn get_file_header(token: &AccessToken, file_descriptor: &FileDescriptor, state:
                 Ok(CryptResponse::NoSuchFile(file_descriptor.clone()))
             }
         } else {
-            Ok(CryptResponse::NoSuchRepository { id: repo_id.clone() })
+            Ok(CryptResponse::NoSuchRepository { id: RepoId::from(repo_id.clone()) })
         }
     } else {
         Ok(invalid_token_response_only("Trying to update file with invalid token", token))
@@ -328,13 +328,13 @@ fn get_file(token: &AccessToken, file_descriptor: &FileDescriptor, state: &mut S
                         }
                     }
                 } else {
-                    Ok(CryptResponse::UnrecognizedFile(format!("{}", file.get_id().simple())))
+                    Ok(CryptResponse::UnrecognizedFile(format!("{}", file.get_id())))
                 }
             } else {
                 Ok(CryptResponse::NoSuchFile(file_descriptor.clone()))
             }
         } else {
-            Ok(CryptResponse::NoSuchRepository { id: repo_id.clone() })
+            Ok(CryptResponse::NoSuchRepository { id: RepoId::from(repo_id.clone()) })
         }
     } else {
         Ok(invalid_token_response_only("Trying to update file with invalid token", token))
@@ -379,9 +379,9 @@ fn create_or_update_file(path: &PathBuf, state: &mut State, create: bool) -> Res
                             Ok(repo) => {
                                 let repo_id = repo.get_id();
                                 state.get_scan_result_mut().add_repo(repo.clone());
-                                Ok(CryptResponse::RepositoryChanged(repo_id))
+                                Ok(CryptResponse::RepositoryChanged(RepoId::from(repo_id)))
                             }
-                            Err(e) => Ok(CryptResponse::RepositoryOpenFailed { id: header.get_id() }),
+                            Err(e) => Ok(CryptResponse::RepositoryOpenFailed { id: RepoId::from(header.get_id()) }),
                         }
                     }
                     _ => Ok(CryptResponse::UnrecognizedFile(path_to_str(path)))
@@ -421,7 +421,7 @@ fn invalid_token(msg: &str, token: &AccessToken) -> Result<CryptResponse, String
 
 fn invalid_token_response_only(msg: &str, token: &AccessToken) -> CryptResponse {
     let ret = format!("No valid access token {}: {}", token, msg);
-    warn! ("{}", ret);
+    warn!("{}", ret);
     CryptResponse::InvalidToken(ret)
 }
 
@@ -439,7 +439,7 @@ pub mod tests {
     use spectral::prelude::*;
     use std::time::{Instant, Duration};
     use log4rs;
-    use super::super::super::util::io::{check_map_path};
+    use super::super::super::util::io::check_map_path;
     use super::super::state::scanresult::CheckRes;
 
     pub fn create_temp_repo() -> (TempDir, Repository, HashedPw) {
@@ -480,10 +480,10 @@ pub mod tests {
             _ => panic!("No valid response")
         };
 
-        assert_eq! (1, state.get_scan_result().get_repositories().len());
-        assert! (state.has_repository(&id));
+        assert_eq!(1, state.get_scan_result().get_repositories().len());
+        assert!(state.has_repository(&id));
         match close_repository(&id, &token, &mut state).unwrap() {
-            CryptResponse::RepositoryIsClosed { id: response_id } => assert_eq! (id, response_id),
+            CryptResponse::RepositoryIsClosed { id: response_id } => assert_eq!(id, response_id),
             _ => panic!("Not the correct repository")
         }
     }
@@ -501,20 +501,20 @@ pub mod tests {
 
         match response {
             CryptResponse::RepositoryOpened { token, id: resp_id } => {
-                assert_eq! (id, resp_id);
+                assert_eq!(id, resp_id);
             }
             _ => panic!("No valid response")
         }
 
         let response = open_repository(&id, &"name".to_string(), pw_wrong, &mut state).unwrap();
-        assert_eq! (CryptResponse::RepositoryOpenFailed { id: id }, response);
+        assert_eq!(CryptResponse::RepositoryOpenFailed { id: id }, response);
 
         let state = state;
-        assert_eq! (1, state.get_repositories().len());
+        assert_eq!(1, state.get_repositories().len());
         let ref repostate = state.get_repository(&id).unwrap();
-        assert_eq! (1, repostate.get_files().len());
+        assert_eq!(1, repostate.get_files().len());
         let (id, file) = repostate.get_files().iter().next().unwrap();
-        assert_eq! ("test header", file.get_header().as_str());
+        assert_eq!("test header", file.get_header().as_str());
     }
 
     #[test]
@@ -526,13 +526,13 @@ pub mod tests {
         let mut state = RepositoryState::new(repo, pw);
         let token = state.generate_token();
 
-        assert_eq! (true, state.check_token(&token));
+        assert_eq!(true, state.check_token(&token));
         let mut long_ago = Instant::now() - Duration::from_secs(60 * 21);
         state.set_token_time(&token, long_ago);
-        assert_eq! (false, state.check_token(&token));
+        assert_eq!(false, state.check_token(&token));
 
         let token = state.generate_token();
-        assert_eq! (false, state.check_token(&AccessToken::new()));
+        assert_eq!(false, state.check_token(&AccessToken::new()));
 
         let mut long_ago = Instant::now() - Duration::from_secs(5);
         state.set_token_time(&token, long_ago);
@@ -552,7 +552,7 @@ pub mod tests {
         let pw = "password".as_bytes();
         let token1 = open_repo_get_token(&id, pw, &mut state);
         let token2 = open_repo_get_token(&id, pw, &mut state);
-        assert_ne! (token1, token2);
+        assert_ne!(token1, token2);
 
         let invalid_token = AccessToken::new();
         let response = close_repository(&id, &invalid_token, &mut state).unwrap();
@@ -560,21 +560,21 @@ pub mod tests {
             CryptResponse::InvalidToken(_) => true,
             _ => false
         };
-        assert_eq! (true, result, "Should have an error invalid token, but did not!");
+        assert_eq!(true, result, "Should have an error invalid token, but did not!");
 
         let response = close_repository(&id, &token1, &mut state).unwrap();
         let result = match response {
             CryptResponse::RepositoryIsClosed { id: res_id } => res_id == id,
             _ => false
         };
-        assert_eq! (true, result, "Should have received a close of repo, but did not!");
+        assert_eq!(true, result, "Should have received a close of repo, but did not!");
 
-        assert_eq! (1, state.get_repositories().len());
+        assert_eq!(1, state.get_repositories().len());
         let response = close_repository(&id, &token2, &mut state).unwrap();
-        assert_eq! (0, state.get_repositories().len());
+        assert_eq!(0, state.get_repositories().len());
     }
 
-    fn open_repo_get_token(id: &Uuid, pw: &[u8], state: &mut State) -> AccessToken {
+    fn open_repo_get_token(id: &RepoId, pw: &[u8], state: &mut State) -> AccessToken {
         let response = open_repository(id, &"name".to_string(), pw, state);
         match response.unwrap() {
             CryptResponse::RepositoryOpened { token, id } => token.clone(),
@@ -594,8 +594,8 @@ pub mod tests {
         let response = list_files(&id, &token, &mut state).unwrap();
         match response {
             CryptResponse::Files(f) => {
-                assert_eq! (1, f.len());
-                assert_eq! ("test header".to_string(), f[0].header);
+                assert_eq!(1, f.len());
+                assert_eq!("test header".to_string(), f[0].header);
             }
             _ => panic!("Got invalid response {:?}", &response)
         }
@@ -613,8 +613,8 @@ pub mod tests {
         let response = list_repositories(&mut state).unwrap();
         match response {
             CryptResponse::Repositories(v) => {
-                assert_eq! (1, v.len());
-                assert_eq! ("Hallo Repo".to_string(), v[0].name);
+                assert_eq!(1, v.len());
+                assert_eq!("Hallo Repo".to_string(), v[0].name);
             }
             _ => panic!("Got invalid response {:?}", &response)
         }
@@ -634,8 +634,8 @@ pub mod tests {
         let response = create_new_file(&token, &"test header 2".to_string(), &"content2".as_bytes().to_vec(), &id, &mut state).unwrap();
         let file_id = match response {
             CryptResponse::FileCreated(d) => {
-                assert_eq! (0, d.version);
-                assert_eq! ( &id, &d.repo);
+                assert_eq!(0, d.version);
+                assert_eq!(&id, &d.repo);
                 d.id
             }
             _ => panic!("Got invalid response {:?}", &response)
@@ -644,7 +644,7 @@ pub mod tests {
         let mut found = false;
         for file in dir.read_dir().unwrap() {
             let result = check_map_path(&file.unwrap().path());
-            info! ("Found {:?}", &result);
+            info!("Found {:?}", &result);
             match result {
                 Err(_) => {}
                 Ok(c) => match c {
@@ -676,8 +676,8 @@ pub mod tests {
         let response = create_new_file(&token, &"test header 2".to_string(), &"content2".as_bytes().to_vec(), &id, &mut state).unwrap();
         let file_id = match response {
             CryptResponse::FileCreated(d) => {
-                assert_eq! (0, d.version);
-                assert_eq! ( &id, &d.repo);
+                assert_eq!(0, d.version);
+                assert_eq!(&id, &d.repo);
                 d.id
             }
             _ => panic!("Got invalid response {:?}", &response)
@@ -693,8 +693,8 @@ pub mod tests {
         let result = update_file(&token, &descriptor, Some(&"bla".to_string()), None, &mut state).unwrap();
         match result {
             CryptResponse::File(desc) => {
-                assert_eq! ("bla", desc.header);
-                assert_eq! (1, desc.descriptor.version);
+                assert_eq!("bla", desc.header);
+                assert_eq!(1, desc.descriptor.version);
             }
             _ => panic!("Did not update file. Result: {:?}", result),
         }
@@ -710,14 +710,14 @@ pub mod tests {
         let result = delete_file(&token, &descriptor, &mut state).unwrap();
         match result {
             CryptResponse::FileDeleted(desc) => {
-                assert_eq! (file_id, desc.id);
+                assert_eq!(file_id, desc.id);
             }
             _ => panic!("Did not delete file. Result: {:?}", result),
         }
         let res = state.get_repository(&repo_id).unwrap().get_file(&file_id);
-        assert! (res.is_none());
-        assert! ( !state.get_scan_result().has_file(&file_id));
-        assert!( !path.exists());
+        assert!(res.is_none());
+        assert!(!state.get_scan_result().has_file(&file_id));
+        assert!(!path.exists());
     }
 
     #[test]
@@ -728,7 +728,7 @@ pub mod tests {
         let result = get_file_header(&token, &descriptor, &mut state).unwrap();
         match result {
             CryptResponse::File(fhd) => {
-                assert_eq! ("test header 2".to_string(), fhd.header);
+                assert_eq!("test header 2".to_string(), fhd.header);
             }
             _ => panic!("Did not get file header. Result: {:?}", result),
         }
@@ -742,8 +742,8 @@ pub mod tests {
         let result = get_file(&token, &descriptor, &mut state).unwrap();
         match result {
             CryptResponse::FileContent(fhd, content) => {
-                assert_eq! ("test header 2".to_string(), fhd.header);
-                assert_eq! ("content2".as_bytes(), content.as_slice());
+                assert_eq!("test header 2".to_string(), fhd.header);
+                assert_eq!("content2".as_bytes(), content.as_slice());
             }
             _ => panic!("Did not get file content. Result: {:?}", result),
         }
@@ -764,8 +764,8 @@ pub mod tests {
         let result = file_added(&path, &mut state);
         match result {
             Ok(CryptResponse::FileCreated(desc)) => {
-                assert_eq! (desc.id, file_id);
-                assert_eq! (desc.repo, repo_id);
+                assert_eq!(desc.id, file_id);
+                assert_eq!(desc.repo, repo_id);
             }
             Ok(o) => {
                 panic!("Received invalid response {:?}", o);
@@ -794,8 +794,8 @@ pub mod tests {
         let result = file_changed(&path, &mut state);
         match result {
             Ok(CryptResponse::FileChanged(desc)) => {
-                assert_eq! (desc.id, file_id);
-                assert_eq! (desc.repo, repo_id);
+                assert_eq!(desc.id, file_id);
+                assert_eq!(desc.repo, repo_id);
             }
             Ok(o) => {
                 panic!("Received invalid response {:?}", o);
@@ -806,7 +806,7 @@ pub mod tests {
         }
 
         let file = state.get_repository_mut(&repo_id).unwrap().get_file_mut(&file_id).unwrap().clone();
-        assert_eq! ("HUHU", file.get_header().as_str());
+        assert_eq!("HUHU", file.get_header().as_str());
     }
 
     #[test]
@@ -822,8 +822,8 @@ pub mod tests {
         let result = file_deleted(&path, &mut state);
         match result {
             Ok(CryptResponse::FileDeleted(desc)) => {
-                assert_eq! (desc.id, file_id);
-                assert_eq! (desc.repo, repo_id);
+                assert_eq!(desc.id, file_id);
+                assert_eq!(desc.repo, repo_id);
             }
             Ok(o) => {
                 panic!("Received invalid response {:?}", o);
@@ -833,8 +833,8 @@ pub mod tests {
             }
         }
 
-        assert! ( !state.get_repository_mut(&repo_id).unwrap().get_files().contains_key(&file_id));
-        assert! (!state.get_scan_result().has_file(&file_id));
+        assert!(!state.get_repository_mut(&repo_id).unwrap().get_files().contains_key(&file_id));
+        assert!(!state.get_scan_result().has_file(&file_id));
     }
 
 

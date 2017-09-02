@@ -157,7 +157,6 @@ use dto::*;
 pub mod ui;
 
 use search::SearchParam;
-use dto::{Page, OpenRepository};
 use state::GlobalState;
 use crypt::CryptoActor;
 use dto::{RepositoryDescriptor, RepositoryDto, AccessToken};
@@ -165,7 +164,7 @@ use serde_json::to_string;
 use std::path::PathBuf;
 
 use rest_in_rust::*;
-use http::status;
+use http::StatusCode;
 use http::header;
 //
 //#[error(404)]
@@ -189,8 +188,8 @@ pub fn list_files(req: &mut Request) -> Result<Response, HttpError> {
     let repo_id = RepoId::from_req(req)?;
     let state = GlobalState::from_req_as_ref(req)?;
 
-    if state.check_token(repo_id.as_ref(), &token) {
-        let page = list_files_internal(search, repo_id.as_ref(), &token, state);
+    if state.check_token(&repo_id, &token) {
+        let page = list_files_internal(search, &repo_id, &token, state);
         match to_string(&page) {
             Ok(str) => Ok(str.into()),
             Err(e) => Err(format!("Could not serialize page: {}", e).into())
@@ -200,7 +199,7 @@ pub fn list_files(req: &mut Request) -> Result<Response, HttpError> {
     }
 }
 
-fn list_files_internal(search: SearchParam, repo_id: &Uuid, token: &AccessToken, state: &GlobalState) -> Page {
+fn list_files_internal(search: SearchParam, repo_id: &RepoId, token: &AccessToken, state: &GlobalState) -> Page {
     state.search_cache().search(search, repo_id, token)
 }
 
@@ -211,8 +210,8 @@ pub fn list_repositories(req: &mut Request) -> Result<Response, HttpError> {
     let c: &CryptoActor = state.crypt();
     let option = c.list_repositories();
     let (body, status) = match option {
-        None => ("No result...".to_string(), status::NOT_FOUND),
-        Some(vec) => (to_string(&vec).unwrap(), status::OK),
+        None => ("No result...".to_string(), StatusCode::NOT_FOUND),
+        Some(vec) => (to_string(&vec).unwrap(), StatusCode::OK),
     };
     Response::builder()
         .status(status)
@@ -228,10 +227,10 @@ pub fn create_repository(req: &mut Request) -> Result<Response, HttpError> {
 
     info!("#create_repository");
     let c: &CryptoActor = state.crypt();
-    let option = c.create_repository(create_repo.name.as_str(), create_repo.password.clone(), EncryptionType::RingChachaPoly1305);
+    let option = c.create_repository(create_repo.name.as_str(), PlainPw::new(create_repo.password.as_ref()), EncryptionType::RingChachaPoly1305);
     let (body, status) = match option {
-        None => ("No result...".to_string(), status::NOT_FOUND),
-        Some(res) => (to_string(&res).unwrap(), status::OK),
+        None => ("No result...".to_string(), StatusCode::NOT_FOUND),
+        Some(res) => (to_string(&res).unwrap(), StatusCode::OK),
     };
 
 
@@ -250,10 +249,10 @@ pub fn open_repository(req: &mut Request) -> Result<Response, HttpError> {
 
     info!("#open_repository");
     let c: &CryptoActor = state.crypt();
-    let option = c.open_repository(repo_id.as_ref(), open.user_name.clone(), open.password.clone());
+    let option = c.open_repository(&repo_id, open.user_name.clone(), PlainPw::new(open.password.as_ref()));
     let (body, status) = match option {
-        None => ("No result...".to_string(), status::NOT_FOUND),
-        Some(res) => (to_string(&res).unwrap(), status::OK),
+        None => ("No result...".to_string(), StatusCode::NOT_FOUND),
+        Some(res) => (to_string(&res).unwrap(), StatusCode::OK),
     };
 
     Response::builder()
@@ -285,8 +284,8 @@ pub fn create_file(req: &mut Request) -> Result<Response, HttpError> {
     let c: &CryptoActor = state.crypt();
     let option = c.create_new_file(&repo_id, &token, header, content.unwrap_or(Vec::new()));
     let (body, status) = match option {
-        None => ("No result...".to_string(), status::NOT_FOUND),
-        Some(res) => (to_string(&res).unwrap(), status::OK),
+        None => ("No result...".to_string(), StatusCode::NOT_FOUND),
+        Some(res) => (to_string(&res).unwrap(), StatusCode::OK),
     };
 
     Response::builder()

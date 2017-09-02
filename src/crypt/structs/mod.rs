@@ -11,7 +11,7 @@ use std::fmt::{Display, Formatter};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
 use ring::constant_time::verify_slices_are_equal;
 use ring::aead::{AES_256_GCM, CHACHA20_POLY1305, Algorithm};
-use std::time::{Instant};
+use std::time::Instant;
 use chrono::Duration;
 use uuid::Uuid;
 use std::fmt;
@@ -19,8 +19,8 @@ use rand::{OsRng, Rng};
 use byteorder::{WriteBytesExt, LittleEndian};
 use self::serialize::*;
 use std::io::{Read, Write, Cursor};
-use super::error::{ParseError};
-use dto::{EncryptionType,PasswordHashType};
+use super::error::ParseError;
+use dto::{FileId, EncryptionType, PasswordHashType};
 
 pub mod crypto;
 pub mod file;
@@ -276,14 +276,14 @@ mod tests {
     fn enc_type() {
         let mut vec: Vec<u8> = Vec::new();
         EncryptionType::RingAESGCM.to_bytes(&mut vec);
-        assert_eq! (1, vec.len());
+        assert_eq!(1, vec.len());
         assert_eq!(2, vec[0]);
 
-        assert_eq! (EncryptionType::None, EncryptionType::from_bytes(&mut Cursor::new(&[0])).unwrap());
+        assert_eq!(EncryptionType::None, EncryptionType::from_bytes(&mut Cursor::new(&[0])).unwrap());
         assert_eq!(EncryptionType::RingChachaPoly1305, EncryptionType::from_bytes(&mut Cursor::new(&[1])).unwrap());
-        assert_eq! (EncryptionType::RingAESGCM, EncryptionType::from_bytes(&mut Cursor::new(&[2])).unwrap());
+        assert_eq!(EncryptionType::RingAESGCM, EncryptionType::from_bytes(&mut Cursor::new(&[2])).unwrap());
 
-        assert_eq! (Some(ParseError::WrongValue(0, 42)), EncryptionType::from_bytes(&mut Cursor::new(&[42])).err());
+        assert_eq!(Some(ParseError::WrongValue(0, 42)), EncryptionType::from_bytes(&mut Cursor::new(&[42])).err());
     }
 
     #[test]
@@ -291,9 +291,9 @@ mod tests {
         let mut vec: Vec<u8> = Vec::new();
         EncryptionType::RingAESGCM.to_bytes(&mut vec);
         PasswordHashType::None.to_bytes(&mut vec);
-        assert_eq! (2, vec.len());
-        assert_eq! (2, vec[0]);
-        assert_eq! (0, vec[1]);
+        assert_eq!(2, vec.len());
+        assert_eq!(2, vec[0]);
+        assert_eq!(0, vec[1]);
     }
 
     #[test]
@@ -316,7 +316,7 @@ mod tests {
         expected.push(0x00);
 
         assert_eq!(expected.len(), result.len());
-        assert_eq! (expected, result);
+        assert_eq!(expected, result);
 
         let mut c = Cursor::new(result.as_slice());
         let reparsed = MainHeader::from_bytes(&mut c).unwrap();

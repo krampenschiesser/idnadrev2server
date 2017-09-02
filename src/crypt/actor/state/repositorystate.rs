@@ -14,7 +14,7 @@ use super::super::super::structs::file::{EncryptedFile, FileHeader};
 use super::super::super::structs::repository::{Repository, RepoHeader};
 use super::super::super::structs::crypto::HashedPw;
 use super::super::super::error::CryptError;
-use dto::AccessToken;
+use dto::{FileId,RepoId,AccessToken};
 use uuid::Uuid;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -32,11 +32,11 @@ pub struct AccessTokenState {
 
 
 pub struct RepositoryState {
-    files: HashMap<Uuid, EncryptedFile>,
+    files: HashMap<FileId, EncryptedFile>,
     error_files: Vec<(PathBuf, String)>,
     key: HashedPw,
     repo: Repository,
-    tokens: HashMap<Uuid, AccessTokenState>,
+    tokens: HashMap<AccessToken, AccessTokenState>,
 }
 
 impl AccessTokenState {
@@ -75,12 +75,12 @@ impl RepositoryState {
     pub fn generate_token(&mut self) -> AccessToken {
         let token = AccessTokenState::new();
         let retval = token.get_token();
-        self.tokens.insert(token.get_id(), token);
+        self.tokens.insert(token.get_token(), token);
         retval
     }
 
     pub fn remove_token(&mut self, token: &AccessToken) {
-        match self.tokens.remove(&token.id) {
+        match self.tokens.remove(&token) {
             None => warn!("No token {} present.", token),
             Some(t) => debug!("Removed token {}", token),
         }
@@ -92,7 +92,7 @@ impl RepositoryState {
 
     pub fn check_token(&mut self, token: &AccessToken) -> bool {
         let cloned = self.tokens.clone();
-        let mut o = self.tokens.get_mut(&token.id);
+        let mut o = self.tokens.get_mut(&token);
         match o {
             None => {
                 debug!("Token not found {}.", &token.id);
@@ -111,10 +111,10 @@ impl RepositoryState {
         }
     }
 
-    pub fn get_file(&self, id: &Uuid) -> Option<&EncryptedFile> {
+    pub fn get_file(&self, id: &FileId) -> Option<&EncryptedFile> {
         self.files.get(id)
     }
-    pub fn get_file_mut(&mut self, id: &Uuid) -> Option<&mut EncryptedFile> {
+    pub fn get_file_mut(&mut self, id: &FileId) -> Option<&mut EncryptedFile> {
         self.files.get_mut(id)
     }
 
@@ -150,15 +150,15 @@ impl RepositoryState {
         self.files.values().map(|f| FileHeaderDescriptor::new(f)).collect()
     }
 
-    pub fn get_files(&self) -> &HashMap<Uuid, EncryptedFile> {
+    pub fn get_files(&self) -> &HashMap<FileId, EncryptedFile> {
         &self.files
     }
 
-    pub fn get_files_mut(&mut self) -> &mut HashMap<Uuid, EncryptedFile> {
+    pub fn get_files_mut(&mut self) -> &mut HashMap<FileId, EncryptedFile> {
         &mut self.files
     }
 
-    pub fn remove_file(&mut self, id: &Uuid) {
+    pub fn remove_file(&mut self, id: &FileId) {
         self.files.remove(id);
     }
 

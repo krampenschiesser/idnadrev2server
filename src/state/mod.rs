@@ -13,9 +13,10 @@ use uuid::Uuid;
 use search::SearchCache;
 use crypt::CryptoIfc;
 use std::sync::RwLock;
-use dto::AccessToken;
+use dto::{RepoId,AccessToken};
 
 use rest_in_rust::*;
+
 
 pub struct GlobalState {
     crypt_actor: CryptoActor,
@@ -87,7 +88,7 @@ impl GlobalState {
         &self.search_cache
     }
 
-    pub fn check_token(&self, repo: &Uuid, token: &AccessToken) -> bool {
+    pub fn check_token(&self, repo: &RepoId, token: &AccessToken) -> bool {
         self.crypt_actor.check_token(repo, token)
     }
 }

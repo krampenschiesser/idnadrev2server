@@ -8,7 +8,7 @@
 // except according to those terms.
 
 use super::super::structs::repository::{RepoHeader, Repository};
-use dto::EncryptionType;
+use dto::{FileId, RepoId, EncryptionType};
 use super::{MainHeader, FileVersion};
 use super::crypto::HashedPw;
 use super::super::util::{decrypt, encrypt};
@@ -26,7 +26,7 @@ use super::serialize::*;
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct FileHeader {
     main_header: MainHeader,
-    repository_id: Uuid,
+    repository_id: RepoId,
     encryption_type: EncryptionType,
     //nonce header length
     //nonce content length
@@ -50,13 +50,13 @@ impl FileHeader {
         let enc_type = repository.encryption_type.clone();
         let nc = random_vec(enc_type.nonce_len());
         let nh = random_vec(enc_type.nonce_len());
-        FileHeader { main_header: mh, repository_id: repository.main_header.id, encryption_type: enc_type, nonce_content: nc, nonce_header: nh, header_length: 0 }
+        FileHeader { main_header: mh, repository_id: RepoId::from(repository.main_header.id), encryption_type: enc_type, nonce_content: nc, nonce_header: nh, header_length: 0 }
     }
 
-    pub fn get_id(&self) -> Uuid {
-        self.main_header.id.clone()
+    pub fn get_id(&self) -> FileId {
+        FileId::from(self.main_header.id.clone())
     }
-    pub fn get_repository_id(&self) -> Uuid {
+    pub fn get_repository_id(&self) -> RepoId {
         self.repository_id.clone()
     }
 
@@ -102,8 +102,8 @@ impl EncryptedFile {
         self.content = Some(content.to_vec());
     }
 
-    pub fn get_id(&self) -> Uuid {
-        self.encryption_header.get_id()
+    pub fn get_id(&self) -> FileId {
+        FileId::from(self.encryption_header.get_id())
     }
 
     pub fn set_header(&mut self, header: &str) {
@@ -242,7 +242,7 @@ impl EncryptedFile {
 impl ByteSerialization for FileHeader {
     fn to_bytes(&self, vec: &mut Vec<u8>) {
         self.main_header.to_bytes(vec);
-        vec.extend_from_slice(self.repository_id.as_bytes());
+        vec.extend_from_slice(self.repository_id.as_ref().as_bytes());
         self.encryption_type.to_bytes(vec);
 
         let nonce_header_len = self.nonce_header.len() as u8;
@@ -259,7 +259,7 @@ impl ByteSerialization for FileHeader {
         if main_header.file_version != FileVersion::FileV1 {
             return Err(ParseError::InvalidFileVersion(main_header.file_version));
         }
-        let repo_id = read_uuid(input)?;
+        let repo_id = RepoId::from(read_uuid(input)?);
         let enc_type = EncryptionType::from_bytes(input)?;
 
         let nonce_header_len = read_u8(input)?;
@@ -292,7 +292,7 @@ mod tests {
     use std::ffi::OsString;
     use std::fs::remove_file;
     use spectral::prelude::*;
-    use super::super::super::util::io::{scan};
+    use super::super::super::util::io::scan;
 
     #[test]
     fn encrypted_file() {
@@ -342,7 +342,7 @@ mod tests {
         let (mut encrypted_file, key, dir, temp) = create_temp_file();
         let original_version = encrypted_file.get_version();
         encrypted_file.set_header("new header");
-        encrypted_file.update(&key,None);
+        encrypted_file.update(&key, None);
 
         let res = scan(&vec![dir.to_path_buf()]).unwrap();
         let tuple = res.get_files().get(&encrypted_file.get_id()).unwrap();
@@ -371,7 +371,7 @@ mod tests {
         //        remove_file(encrypted_file.get_path().unwrap()).unwrap();
         temp.close().unwrap();
 
-        let res = encrypted_file.update(&key,None);
+        let res = encrypted_file.update(&key, None);
         match res {
             Err(CryptError::FileDoesNotExist(s)) => assert_that(&s).contains("myfile"),
             _ => panic!("Invalid result: {:?}", res),
@@ -382,9 +382,9 @@ mod tests {
     fn update_header_optimisticlockerror() {
         let (mut encrypted_file, key, dir, temp) = create_temp_file();
         let mut clone = encrypted_file.clone();
-        clone.update(&key,None);
+        clone.update(&key, None);
 
-        let res = encrypted_file.update(&key,None);
+        let res = encrypted_file.update(&key, None);
         match res {
             Err(CryptError::OptimisticLockError(v)) => assert_eq!(1, v),
             _ => panic!("Invalid result: {:?}", res),

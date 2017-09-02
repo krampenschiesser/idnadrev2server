@@ -17,20 +17,20 @@ use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CryptCmd {
-    CreateNewFile { token: AccessToken, header: String, content: Vec<u8>, repo: Uuid },
+    CreateNewFile { token: AccessToken, header: String, content: Vec<u8>, repo: RepoId},
     UpdateHeader { token: AccessToken, header: String, file: FileDescriptor },
     UpdateFile { token: AccessToken, header: String, content: Vec<u8>, file: FileDescriptor },
     DeleteFile { token: AccessToken, file: FileDescriptor },
     GetFileHeader { token: AccessToken, file: FileDescriptor },
     GetFile { token: AccessToken, file: FileDescriptor },
 
-    CreateRepository { name: String, pw: Vec<u8>, encryption: EncryptionType, kdf: PasswordHashType, folder_id: Option<u16> },
-    OpenRepository { id: Uuid, user_name: String, pw: Vec<u8> },
-    CloseRepository { token: AccessToken, id: Uuid },
+    CreateRepository { name: String, pw: PlainPw, encryption: EncryptionType, kdf: PasswordHashType, folder_id: Option<u16> },
+    OpenRepository { id: RepoId, user_name: String, pw: PlainPw },
+    CloseRepository { token: AccessToken, id: RepoId},
     ListRepositories,
-    ListFiles { token: AccessToken, id: Uuid },
+    ListFiles { token: AccessToken, id: RepoId},
 
-    CheckToken { repo: Uuid, token: AccessToken },
+    CheckToken { repo: RepoId, token: AccessToken },
 
     FileAdded(PathBuf),
     FileChanged(PathBuf),
@@ -44,7 +44,7 @@ pub enum CryptResponse {
     FileCreated(FileDescriptor),
     FileChanged(FileDescriptor),
     FileDeleted(FileDescriptor),
-    RepositoryChanged(Uuid),
+    RepositoryChanged(RepoId),
 
     File(FileHeaderDescriptor),
     FileContent(FileHeaderDescriptor, Vec<u8>),
@@ -52,11 +52,11 @@ pub enum CryptResponse {
 
     Repositories(Vec<RepositoryDescriptor>),
 
-    RepositoryOpened { token: AccessToken, id: Uuid },
-    RepositoryCreated { token: AccessToken, id: Uuid },
-    RepositoryOpenFailed { id: Uuid },
-    RepositoryIsClosed { id: Uuid },
-    NoSuchRepository { id: Uuid },
+    RepositoryOpened { token: AccessToken, id: RepoId},
+    RepositoryCreated { token: AccessToken, id: RepoId },
+    RepositoryOpenFailed { id: RepoId},
+    RepositoryIsClosed { id: RepoId },
+    NoSuchRepository { id: RepoId },
     RepositoryAlreadyExists { name: String },
 
     TokenValid,

@@ -31,12 +31,12 @@ fn read_file_string(path: &PathBuf) -> Result<String, ::std::io::Error> {
 }
 
 pub fn manifest(req: &mut Request) -> Result<Response, HttpError> {
-    use ::http::status;
+    use ::http::StatusCode;
     use ::http::header;
     let ui_state = UiState::from_req_as_ref(req)?;
 
     let hash = ui_state.compute_hash();
-    let status = if hash.is_ok() { status::OK.into() } else { status::INTERNAL_SERVER_ERROR };
+    let status = if hash.is_ok() { StatusCode::OK.into() } else { StatusCode::INTERNAL_SERVER_ERROR };
 
     let body = if hash.is_ok() { hash.unwrap() } else { format!("{}", hash.err().unwrap()) };
 
