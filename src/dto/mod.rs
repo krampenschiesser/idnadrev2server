@@ -18,8 +18,10 @@ use std::fmt;
 
 use rest_in_rust::*;
 
+#[derive(Debug, Clone, Copy)]
 pub struct RepoId(Uuid);
 
+#[derive(Debug, Clone, Copy)]
 pub struct FileId(Uuid);
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
@@ -141,6 +143,12 @@ pub struct File {
 
 }
 
+impl Display for RepoId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0.simple())
+    }
+}
+
 impl Display for RepositoryDescriptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Repository [name='{}', id={}]", self.name, self.id, )
@@ -216,7 +224,7 @@ impl File {
         Ok(f)
     }
 
-    pub fn new(repo: &Uuid, name: &str, file_type: &str, content: Option<Vec<u8>>) -> Self {
+    pub fn new(repo: &RepoId, name: &str, file_type: &str, content: Option<Vec<u8>>) -> Self {
         let now = Utc::now();
         File {
             repository: repo.clone(),
@@ -276,7 +284,7 @@ impl AccessToken {
         let name = HeaderName::from_str("token").unwrap();
         let string = format!("{}", self.id.simple());
         let value = HeaderValue::from_str(string.as_ref()).unwrap();
-        (name,value)
+        (name, value)
     }
 }
 

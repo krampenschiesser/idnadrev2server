@@ -339,12 +339,16 @@ mod test {
     use dto::*;
     use chrono::{DateTime, Utc};
     use rest_in_rust::*;
-    use http::{Uri,Method,Request};
+    use http::{StatusCode, Uri, Method, Request};
     use http::request::Builder as RequestBuilder;
+    use std::str::FromStr;
+    use ::serde_json::to_string;
 
     use spectral::prelude::*;
 
     fn setup() -> (TempDir, ServerTester) {
+        use ::rest;
+
         let temp = TempDir::new("rest-test").unwrap();
 
         let state = GlobalState::new(vec![temp.path().to_path_buf()]).unwrap();
@@ -367,68 +371,63 @@ mod test {
         (temp, tester)
     }
 
-    fn body_to_json<'de, T>(response: &mut Response) -> T
-        where T: ::serde::Deserialize<'de> {
-        let b = response.body().unwrap();
-        let string = b.into_string().unwrap();
+    fn get_ok<'de, T>(path: &str, server: &ServerTester) -> T
+        where T: ::serde::de::DeserializeOwned  {
 
-        from_str(&string).unwrap()
-        //        response.body().and_then(|b| from_str(b.into_string().unwrap().as_str()).ok()).unwrap()
+        let uri = Uri::from_str(path).unwrap();
+        let request = RequestBuilder::new().uri(uri).method(Method::GET).body(().into()).unwrap();
+
+        let response = server.handle(request);
+        assert_eq!(StatusCode::OK, response.status());
+        response.body().to_json().unwrap()
     }
 
-    fn get_ok<'de, T>(path: &str, rocket: &Rocket) -> T
-        where T: ::serde::Deserialize<'de> {
-        let mut req = MockRequest::new(Get, path);
-        let mut response = req.dispatch_with(&rocket);
-        assert_eq!(Status::Ok, response.status());
-        body_to_json(&mut response)
+    fn get_from_repo<T>(suffix: &str, repo_id: &RepoId, token: &AccessToken, server: &ServerTester) -> T
+        where T: ::serde::de::DeserializeOwned {
+
+        let uri = Uri::from_str(format!("/rest/v1/repo/{}{}", repo_id, suffix).as_str()).unwrap();
+        let (hv, hn) = token.to_header();
+        let request = RequestBuilder::new().header(hv, hn).uri(uri).method(Method::GET).body(().into()).unwrap();
+
+        let response = server.handle(request);
+        assert_eq!(StatusCode::OK, response.status());
+        response.body().to_json().unwrap()
     }
 
-    fn get_from_repo<'de, T>(suffix: &str, repo_id: &Uuid, token: &AccessToken, rocket: &Rocket) -> T
-        where T: ::serde::Deserialize<'de> {
-        let mut req = MockRequest::new(Get, format!("/rest/v1/repo/{}{}", repo_id, suffix));
-        req.add_header(Header::new("token", format!("{}", token.id)));
-        let mut response = req.dispatch_with(&rocket);
-        assert_eq!(Status::Ok, response.status());
-        body_to_json(&mut response)
-    }
-
-    fn post_ok<'de, T, B>(path: &str, body: &B, rocket: &Rocket) -> T
-        where T: ::serde::Deserialize<'de>,
+    fn post_ok<T, B>(path: &str, body: &B, server: &ServerTester) -> T
+        where T: ::serde::de::DeserializeOwned,
               B: ::serde::Serialize
     {
         use ::serde_json::to_string;
+        use http::header::{HeaderName, HeaderValue};
+        use http::header;
         let s = to_string(body).unwrap();
 
-        let mut req = MockRequest::new(Post, path).body(s);
-        req.add_header(ContentType::JSON);
-        let mut response = req.dispatch_with(&rocket);
-        assert_eq!(Status::Ok, response.status());
-        body_to_json(&mut response)
+        let uri = Uri::from_str(path).unwrap();
+
+        let hv = HeaderValue::from_str("application/json").unwrap();
+        let request = RequestBuilder::new().header(header::CONTENT_TYPE, hv).uri(uri).method(Method::POST).body(s.into()).unwrap();
+
+        let response = server.handle(request);
+        assert_eq!(StatusCode::OK, response.status());
+        response.body().to_json().unwrap()
     }
 
-    fn post_to_repo<'de, T, B>(suffix: &str, repo_id: &Uuid, token: &AccessToken, body: &B, server: &ServerTester) -> T
-        where T: ::serde::Deserialize<'de>,
+    fn post_to_repo<T, B>(suffix: &str, repo_id: &RepoId, token: &AccessToken, body: &B, server: &ServerTester) -> T
+        where T: ::serde::de::DeserializeOwned,
               B: ::serde::Serialize
     {
-        use ::serde_json::to_string;
-
-        let (key,value) = token.to_header();
+        let (key, value) = token.to_header();
         let s = to_string(body).unwrap();
-        let uri = Uri::from_str(format!("/rest/v1/repo/{}{}", repo_id, suffix)).unwrap();
+        let uri = Uri::from_str(format!("/rest/v1/repo/{}{}", repo_id, suffix).as_ref()).unwrap();
 
-        let request = RequestBuilder::new().header().uri(uri).method(Method::POST).body(s.into()).unwrap();
-
-        let mut req = MockRequest::new(Post, uri).body(s);
-        req.add_header(ContentType::JSON);
-        req.add_header(Header::new("token", format!("{}", token.id)));
-
-        let mut response = req.dispatch_with(&server);
-        assert_eq!(Status::Ok, response.status());
-        body_to_json(&mut response)
+        let request = RequestBuilder::new().header(key, value).uri(uri).method(Method::POST).body(s.into()).unwrap();
+        let response = server.handle(request);
+        assert_eq!(StatusCode::OK, response.status());
+        response.body().to_json().unwrap()
     }
 
-    fn create_open_repo() -> (TempDir, ServerTester, Uuid, AccessToken) {
+    fn create_open_repo() -> (TempDir, ServerTester, RepoId, AccessToken) {
         let (temp, server) = setup();
         let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &server);
         assert_that(&vec).is_empty();
@@ -436,7 +435,7 @@ mod test {
         let response: Option<RepositoryDto> = post_ok("/rest/v1/repo", &cmd, &server);
         let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &server);
         assert_that(&vec).has_length(1);
-        let repo_id = &vec[0].id;
+        let repo_id = RepoId(vec[0].id);
         let cmd = OpenRepository { user_name: String::new(), password: vec![1, 2, 3] };
         let response: Option<AccessToken> = post_ok(format!("/rest/v1/repo/{}/", repo_id).as_str(), &cmd, &server);
         assert!(response.is_some());
@@ -450,20 +449,21 @@ mod test {
 
     #[test]
     fn create_file_invalid_token() {
-        let (temp, rocket, repo_id, token) = create_open_repo();
-
+        let (temp, server, repo_id, token) = create_open_repo();
 
         let mut cmd = File::new(&repo_id, "test", "DOCUMENT", Some(vec![1, 2, 3, 4, 5, 6]));
         cmd.tags = vec!["hallo".to_string()];
 
-        let file: Option<FileDescriptor> = post_to_repo("/file", &repo_id, &token, &cmd, &rocket);
+        let file: Option<FileDescriptor> = post_to_repo("/file", &repo_id, &token, &cmd, &server);
 
         let other_token = AccessToken::new();
 
-        let mut req = MockRequest::new(Get, format!("/rest/v1/repo/{}/document", &repo_id));
-        req.add_header(Header::new("token", format!("{}", &other_token.id)));
-        let mut response = req.dispatch_with(&rocket);
-        assert_eq!(Status::Unauthorized, response.status());
+        let uri = Uri::from_str(format!("/rest/v1/repo/{}/document", &repo_id).as_str()).unwrap();
+        let (hv, hn) = token.to_header();
+        let request = RequestBuilder::new().header(hv, hn).uri(uri).method(Method::GET).body(().into()).unwrap();
+
+        let response = server.handle(request);
+        assert_eq!(StatusCode::UNAUTHORIZED, response.status());
     }
 
     #[test]

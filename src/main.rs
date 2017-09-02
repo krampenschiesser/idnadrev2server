@@ -38,8 +38,6 @@ extern crate http;
 
 #[cfg(test)]
 extern crate spectral;
-#[cfg(test)]
-extern crate reqwest;
 
 mod dto;
 mod search;
