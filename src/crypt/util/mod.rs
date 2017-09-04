@@ -10,7 +10,7 @@
 use dto::EncryptionType;
 use super::structs::crypto::HashedPw;
 use super::error::RingError;
-use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey, Algorithm};
+use ring::aead::{open_in_place, seal_in_place, OpeningKey, SealingKey};
 use rand::{OsRng, Rng};
 
 pub mod io;
@@ -57,13 +57,14 @@ pub fn random_vec(len: usize) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::structs::crypto::{HashedPw, PlainPw};
+    use dto::PlainPw;
+    use super::super::structs::crypto::HashedPw;
     use dto::{EncryptionType, PasswordHashType};
 
     fn hashed_key() -> HashedPw {
         let plainpw = PlainPw::new("hello".as_bytes());
-        let salt ="hello".as_bytes();
-        HashedPw::new(plainpw, &EncryptionType::RingChachaPoly1305, &PasswordHashType::SCrypt { iterations: 1, memory_costs: 1, parallelism: 1 },salt)
+        let salt = "hello".as_bytes();
+        HashedPw::new(plainpw, &EncryptionType::RingChachaPoly1305, &PasswordHashType::SCrypt { iterations: 1, memory_costs: 1, parallelism: 1 }, salt)
     }
 
     fn nonce() -> Vec<u8> {

@@ -8,13 +8,12 @@
 // except according to those terms.
 
 use std::collections::{HashMap};
-use std::collections::hash_map::Values;
 use dto::FileHeaderDescriptor;
 use super::super::super::structs::file::{EncryptedFile, FileHeader};
-use super::super::super::structs::repository::{Repository, RepoHeader};
+use super::super::super::structs::repository::Repository;
 use super::super::super::structs::crypto::HashedPw;
 use super::super::super::error::CryptError;
-use dto::{FileId,RepoId,AccessToken};
+use dto::{FileId,AccessToken};
 use uuid::Uuid;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -167,13 +166,13 @@ impl RepositoryState {
     }
     #[cfg(test)]
     pub fn set_token_time(&mut self, token: &AccessToken, time: Instant) {
-        let mut t = self.tokens.get_mut(&token.id).unwrap();
+        let mut t = self.tokens.get_mut(token).unwrap();
         t.last_access = time;
     }
 
     #[cfg(test)]
     pub fn get_token_time(&self, token: &AccessToken) -> Instant {
-        let t = self.tokens.get(&token.id).unwrap();
+        let t = self.tokens.get(token).unwrap();
         t.last_access
     }
 }

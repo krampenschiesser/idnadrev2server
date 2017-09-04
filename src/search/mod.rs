@@ -2,10 +2,9 @@ mod filter;
 mod searchparam;
 
 pub use self::searchparam::SearchParam;
-use self::filter::filter_text;
 
 use crypt::{CryptoSender, CryptoIfc };
-use dto::{RepoId,AccessToken, Page, File,FileHeaderDescriptor};
+use dto::{RepoId,AccessToken, Page, File};
 
 pub struct SearchCache {
     pub crypt_sender: CryptoSender,
@@ -23,7 +22,7 @@ impl SearchCache {
 
     fn get_files(&self, repo_id: &RepoId, token: &AccessToken) -> Vec<File> {
         if let Some(mut v) = self.crypt_sender.list_repository_files(repo_id, token) {
-            let mut retval: Vec<File> = v.iter_mut()
+            let  retval: Vec<File> = v.iter_mut()
                 .map(|fhd| File::from_descriptor(fhd))
                 .filter(|r| r.is_ok())
                 .map(|r| r.unwrap())
@@ -39,7 +38,6 @@ impl SearchParam {
     fn filter_file(&self, file: &File) -> bool {
         use search::searchparam::SearchFilter;
         use self::filter::filter_date_time;
-        use self::searchparam::FilterOperator;
         use self::filter::fuzzy_contains;
 
         if let Some(ref file_type) = self.file_type {

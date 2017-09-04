@@ -16,11 +16,11 @@ use super::super::structs::serialize::ByteSerialization;
 use std::path::PathBuf;
 use std::fs::{File,DirEntry};
 use std::time::Duration;
-use std::io::{Read, Write, Cursor};
+use std::io::{Read, Cursor};
 use std::io;
-use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher};
-use std::sync::mpsc::{channel, Receiver};
-use base64::{decode,encode};
+use notify::{Watcher, RecursiveMode, watcher};
+use std::sync::mpsc::{channel};
+use base64::{decode};
 
 pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
     let (tx, rx) = channel();
@@ -193,15 +193,15 @@ pub fn path_to_str(path: &PathBuf) -> String {
 mod tests {
     use super::*;
     use tempdir::TempDir;
-    use super::super::super::structs::crypto::PlainPw;
     use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
     use std::sync::mpsc::channel;
     use std::time::Duration;
     use std::path::Path;
     use std::ffi::OsString;
     use std::fs::remove_file;
-    use spectral::prelude::*;
-    use super::super::super::structs::repository::{RepoHeader,Repository};
+    use super::super::super::structs::repository::{RepoHeader};
+    use std::io::Write;
+    use base64::encode;
 
     #[test]
     fn file_existance() {

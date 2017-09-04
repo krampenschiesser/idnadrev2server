@@ -17,10 +17,9 @@ use super::state::scanresult::ScanResult;
 use super::state::repositorystate::RepositoryState;
 use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
 use super::super::error::{CryptError, ParseError};
-use crypt::structs::crypto::{HashedPw, DoubleHashedPw};
+use crypt::structs::crypto::HashedPw;
 
 use std::error::Error;
-use uuid::Uuid;
 use log::LogLevel;
 use std::path::PathBuf;
 use std::fs::remove_file;
@@ -58,7 +57,7 @@ fn open_repository(id: &RepoId, user_name: &String, pw: &[u8], state: &mut State
     let pw = PlainPw::new(pw);
 
     if state.has_repository(id) {
-        let mut existing = state.get_repository_mut(id).unwrap();
+        let existing = state.get_repository_mut(id).unwrap();
         let hashed = existing.get_repo().hash_key(pw);
 
         if &hashed == existing.get_key() {
@@ -112,7 +111,6 @@ fn create_repository(name: &str, pw: &[u8], enc: &EncryptionType, kdf: &Password
     let path = path.join(format!("{}", repo.get_id()));
     repo.set_path(&path);
     let repo = repo;
-    let repo_id = repo.get_id().clone();
 
     match repo.save() {
         Err(e) => Ok(CryptResponse::Error(format!("{}", e))),
@@ -213,9 +211,9 @@ fn update_file(token: &AccessToken, file_descriptor: &FileDescriptor, header: Op
     let file_id = &file_descriptor.id;
     let repo_id = &file_descriptor.repo;
     let result = if state.check_token(token, repo_id) {
-        let mut repostate = state.get_repository_mut(repo_id).unwrap();
+        let repostate = state.get_repository_mut(repo_id).unwrap();
         let key = repostate.get_key().clone();
-        let mut o = repostate.get_file_mut(file_id);
+        let o = repostate.get_file_mut(file_id);
 
         let cloned_descriptor: FileDescriptor = file_descriptor.clone();
         match o {
@@ -354,10 +352,6 @@ fn create_or_update_file(path: &PathBuf, state: &mut State, create: bool) -> Res
     let result = read_file_header(path);
     match result {
         Ok(file_header) => {
-            let id = file_header.get_id();
-            let repo_id = file_header.get_repository_id();
-            let version = file_header.get_version();
-
             let descriptor = FileDescriptor::new(&file_header);
             state.update_file(file_header, path.clone())?;
 
@@ -431,14 +425,12 @@ pub mod tests {
     use super::*;
     use super::super::super::structs::repository::{Repository, RepoHeader};
     use super::super::super::structs::file::{FileHeader, EncryptedFile};
-    use super::super::super::structs::crypto::{PlainPw, HashedPw};
+    use super::super::super::structs::crypto::HashedPw;
+    use dto::PlainPw;
     use super::super::super::structs::serialize::ByteSerialization;
     use tempdir::TempDir;
     use std::fs::{File, remove_file};
     use std::io::Write;
-    use spectral::prelude::*;
-    use std::time::{Instant, Duration};
-    use log4rs;
     use super::super::super::util::io::check_map_path;
     use super::super::state::scanresult::CheckRes;
 
@@ -490,7 +482,7 @@ pub mod tests {
 
     #[test]
     fn test_open_repo() {
-        let (temp, repo, pw) = create_temp_repo();
+        let (temp, repo, _) = create_temp_repo();
         let dir = temp.path().into();
         let pw = "password".as_bytes();
         let pw_wrong = "hello".as_bytes();
@@ -663,26 +655,26 @@ pub mod tests {
         state.get_repository(&repo.get_id()).unwrap().get_files().get(&file_id).unwrap();
     }
 
-    fn create_repo_and_file<'a>() -> (AccessToken, Uuid, &'a [u8], Uuid, State, TempDir) {
+    fn create_repo_and_file<'a>() -> (AccessToken, FileId, &'a [u8], RepoId, State, TempDir) {
         let (temp, repo, pw) = create_temp_repo();
         let dir = temp.path().to_path_buf();
 
         let pw = "password".as_bytes();
-        let id = repo.get_id();
+        let repo_id = repo.get_id();
         let mut state = State::new(vec![dir.clone()]).unwrap();
 
-        let token = open_repo_get_token(&id, &pw, &mut state);
+        let token = open_repo_get_token(&repo_id, &pw, &mut state);
 
-        let response = create_new_file(&token, &"test header 2".to_string(), &"content2".as_bytes().to_vec(), &id, &mut state).unwrap();
+        let response = create_new_file(&token, &"test header 2".to_string(), &"content2".as_bytes().to_vec(), &repo_id, &mut state).unwrap();
         let file_id = match response {
             CryptResponse::FileCreated(d) => {
                 assert_eq!(0, d.version);
-                assert_eq!(&id, &d.repo);
+                assert_eq!(&repo_id, &d.repo);
                 d.id
             }
             _ => panic!("Got invalid response {:?}", &response)
         };
-        (token, file_id, pw, id, state, temp)
+        (token, file_id, pw, repo_id, state, temp)
     }
 
     #[test]

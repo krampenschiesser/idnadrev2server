@@ -145,9 +145,6 @@
 //! * le = Less than or equal to
 //!
 
-use std::io::Cursor;
-use std::sync::{RwLock, Arc};
-use uuid::Uuid;
 use crypt::CryptoIfc;
 use dto::*;
 
@@ -159,9 +156,8 @@ pub mod ui;
 use search::SearchParam;
 use state::GlobalState;
 use crypt::CryptoActor;
-use dto::{RepositoryDescriptor, RepositoryDto, AccessToken};
+use dto::AccessToken;
 use serde_json::to_string;
-use std::path::PathBuf;
 
 use rest_in_rust::*;
 use http::StatusCode;
@@ -329,16 +325,11 @@ pub fn create_file(req: &mut Request) -> Result<Response, HttpError> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::{Arc, RwLock};
-    use uuid::Uuid;
     use dto::*;
-    use serde_json::from_str;
     use tempdir::TempDir;
     use state::GlobalState;
-    use dto::*;
-    use chrono::{DateTime, Utc};
     use rest_in_rust::*;
-    use http::{StatusCode, Uri, Method, Request};
+    use http::{StatusCode, Uri, Method};
     use http::request::Builder as RequestBuilder;
     use std::str::FromStr;
     use ::serde_json::to_string;
@@ -353,7 +344,7 @@ mod test {
         let state = GlobalState::new(vec![temp.path().to_path_buf()]).unwrap();
 
         let mut router = Router::new();
-        router.get("/rest/v1/", rest::list_repositories);
+        router.get("/rest/v1/repo", rest::list_repositories);
         router.post("/rest/v1/repo", rest::create_repository);
         router.post("/rest/v1/repo/:repo_id", rest::open_repository);
         router.get("/rest/v1/repo/:repo_id/file", rest::create_file);
@@ -371,8 +362,7 @@ mod test {
     }
 
     fn get_ok<'de, T>(path: &str, server: &ServerTester) -> T
-        where T: ::serde::de::DeserializeOwned  {
-
+        where T: ::serde::de::DeserializeOwned {
         let uri = Uri::from_str(path).unwrap();
         let request = RequestBuilder::new().uri(uri).method(Method::GET).body(().into()).unwrap();
 
@@ -383,7 +373,6 @@ mod test {
 
     fn get_from_repo<T>(suffix: &str, repo_id: &RepoId, token: &AccessToken, server: &ServerTester) -> T
         where T: ::serde::de::DeserializeOwned {
-
         let uri = Uri::from_str(format!("/rest/v1/repo/{}{}", repo_id, suffix).as_str()).unwrap();
         let (hv, hn) = token.to_header();
         let request = RequestBuilder::new().header(hv, hn).uri(uri).method(Method::GET).body(().into()).unwrap();
@@ -398,7 +387,7 @@ mod test {
               B: ::serde::Serialize
     {
         use ::serde_json::to_string;
-        use http::header::{HeaderName, HeaderValue};
+        use http::header::HeaderValue;
         use http::header;
         let s = to_string(body).unwrap();
 
@@ -408,7 +397,7 @@ mod test {
         let request = RequestBuilder::new().header(header::CONTENT_TYPE, hv).uri(uri).method(Method::POST).body(s.into()).unwrap();
 
         let response = server.handle(request);
-        assert_eq!(StatusCode::OK, response.status());
+        assert_eq!(StatusCode::OK, response.status(), "{:?}", response);
         response.body().to_json().unwrap()
     }
 
@@ -434,10 +423,10 @@ mod test {
         let response: Option<RepositoryDto> = post_ok("/rest/v1/repo", &cmd, &server);
         let vec: Vec<RepositoryDescriptor> = get_ok("/rest/v1/repo", &server);
         assert_that(&vec).has_length(1);
-        let repo_id = RepoId(vec[0].id);
-        let cmd = OpenRepository { user_name: String::new(), password: vec![1, 2, 3] };
+        let repo_id = vec[0].id;
+        let cmd = OpenRepository { id: repo_id, user_name: "none".to_string(), password: vec![1, 2, 3] };
         let response: Option<AccessToken> = post_ok(format!("/rest/v1/repo/{}/", repo_id).as_str(), &cmd, &server);
-        assert!(response.is_some());
+        assert!(response.is_some(), format!("{:?}", response));
         (temp, server, repo_id.clone(), response.unwrap())
     }
 

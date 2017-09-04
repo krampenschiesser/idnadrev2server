@@ -6,18 +6,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use serde_json;
-use crypt::{FileHeader, EncryptedFile};
-use crypt::{RepoHeader, Repository};
-use std::time::Instant;
-use std::fmt::{Display, Formatter};
-use std::fmt;
-
-use rest_in_rust::*;
-
 mod enc_types;
 mod file;
 mod repository;
@@ -31,6 +19,7 @@ pub use self::search::{Page, Synchronization, SynchronizationFileDescriptor};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     #[test]
     fn token_eq() {

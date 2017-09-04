@@ -10,7 +10,6 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 use thread_local::ThreadLocal;
-use std::thread;
 use std::clone::Clone;
 use std::error::Error;
 use std::fmt::Debug;
@@ -171,6 +170,7 @@ impl<Command, Response, State> Actor<Command, Response, State>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
 
     #[derive(Clone, Eq, PartialEq, Debug)]
     enum TestCmd {

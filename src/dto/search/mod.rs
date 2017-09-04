@@ -1,13 +1,6 @@
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use serde_json;
-use crypt::{FileHeader, EncryptedFile};
-use crypt::{RepoHeader, Repository};
-use std::time::Instant;
-use std::fmt::{Display, Formatter};
-use std::fmt;
 
-use rest_in_rust::*;
 use dto::File;
 use dto::RepoId;
 

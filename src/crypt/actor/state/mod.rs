@@ -7,16 +7,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::structs::repository::{Repository, RepoHeader};
-use super::super::structs::file::{FileHeader, EncryptedFile};
+use super::super::structs::repository::Repository;
+use super::super::structs::file::FileHeader;
 use super::super::error::CryptError;
 use super::super::util::io::scan;
 use self::repositorystate::RepositoryState;
-use self::scanresult::{ScanResult, CheckRes};
+use self::scanresult::ScanResult;
 use dto::{RepoId,FileId,AccessToken};
 
 use std::collections::{HashMap, HashSet};
-use uuid::Uuid;
 use std::path::PathBuf;
 
 
@@ -129,7 +128,7 @@ impl State {
     }
 
     pub fn remove_file(&mut self, repo_id: &RepoId, file_id: &FileId) {
-        let mut o = self.repositories.get_mut(repo_id);
+        let o = self.repositories.get_mut(repo_id);
         match o {
             Some(repo) => {
                 repo.remove_file(file_id);

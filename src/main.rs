@@ -47,10 +47,7 @@ mod state;
 //mod dummy;
 mod actor;
 
-use std::sync::{Arc, RwLock};
-use std::sync::mpsc::channel;
-use std::path::{PathBuf, Path};
-use std::thread;
+use std::path::{PathBuf};
 use state::GlobalState;
 
 

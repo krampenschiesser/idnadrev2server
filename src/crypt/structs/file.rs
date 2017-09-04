@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::structs::repository::{RepoHeader, Repository};
+use super::super::structs::repository::RepoHeader;
 use dto::{FileId, RepoId, EncryptionType};
 use super::{MainHeader, FileVersion};
 use super::crypto::HashedPw;
@@ -15,11 +15,10 @@ use super::super::util::{decrypt, encrypt};
 use super::super::error::{CryptError, ParseError};
 use super::super::util::tempfile::TempFile;
 use super::super::util::random_vec;
-use super::super::util::io::{path_to_str, read_file_header, read_repo_header};
+use super::super::util::io::{path_to_str, read_file_header};
 use std::path::PathBuf;
 use std::fs::{copy, File};
 use std::io::{Read, Write, Cursor};
-use uuid::Uuid;
 use byteorder::{WriteBytesExt, LittleEndian};
 use super::serialize::*;
 
@@ -176,7 +175,7 @@ impl EncryptedFile {
         let mut header_bytes = Vec::new();
         header.to_bytes(&mut header_bytes);
 
-        let mut temp = TempFile::new();
+        let  temp = TempFile::new();
         {
             let mut tempfile = File::create(temp.path.clone())?;
             tempfile.write(header_bytes.as_slice())?;
@@ -217,7 +216,7 @@ impl EncryptedFile {
         let mut header_bytes = Vec::new();
         header.to_bytes(&mut header_bytes);
 
-        let mut temp = TempFile::new();
+        let temp = TempFile::new();
         {
             let mut tempfile = File::create(temp.path.clone())?;
             tempfile.write(header_bytes.as_slice())?;
@@ -284,15 +283,12 @@ impl ByteSerialization for FileHeader {
 mod tests {
     use super::*;
     use tempdir::TempDir;
-    use super::super::crypto::PlainPw;
-    use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
-    use std::sync::mpsc::channel;
-    use std::time::Duration;
+    use dto::PlainPw;
     use std::path::Path;
     use std::ffi::OsString;
-    use std::fs::remove_file;
     use spectral::prelude::*;
     use super::super::super::util::io::scan;
+    use super::super::Repository;
 
     #[test]
     fn encrypted_file() {

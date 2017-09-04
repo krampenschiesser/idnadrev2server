@@ -11,7 +11,6 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::fmt::Debug;
 use super::filter::{filter_text, filter_date};
-use uuid::Uuid;
 
 use rest_in_rust::*;
 
@@ -416,7 +415,7 @@ mod tests {
         let param = SearchParam::from_query_param("?bla=date:gt:2016-04-03T16:33:27+03:00").unwrap();
         assert_eq!(1, param.date_filters.len());
         let ref date_filter = param.date_filters[0];
-        let utc_date = UTC.ymd(2016, 4, 3).and_hms(13, 33, 27);
+        let utc_date = Utc.ymd(2016, 4, 3).and_hms(13, 33, 27);
         assert_eq!(utc_date, date_filter.datetime.unwrap());
     }
 
@@ -462,7 +461,7 @@ mod tests {
     #[test]
     fn deleted() {
         let search = SearchParam::from_query_param("?deleted=date:2017-05-01T12:03:03+01:00").unwrap();
-        assert_eq!(UTC.ymd(2017, 5, 1).and_hms(11, 3, 3), search.deleted.unwrap().datetime.unwrap());
+        assert_eq!(Utc.ymd(2017, 5, 1).and_hms(11, 3, 3), search.deleted.unwrap().datetime.unwrap());
     }
 
     #[test]

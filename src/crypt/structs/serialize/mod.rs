@@ -7,13 +7,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read};
 use uuid::Uuid;
-use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
-use super::*;
-use super::super::structs::crypto::DoubleHashedPw;
-use super::super::structs::repository::{Repository,RepoHeader};
-use super::super::structs::file::{FileHeader,EncryptedFile};
+use byteorder::{ReadBytesExt, LittleEndian};
 use super::super::error::*;
 
 pub const UUID_LENGTH: usize = 16;
@@ -27,24 +23,24 @@ pub trait ByteSerialization: Sized {
 }
 
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crypt::structs::{MainHeader, FileHeader, RepoHeader, FileVersion};
     use dto::*;
 
     #[test]
     fn enc_type() {
         let mut vec: Vec<u8> = Vec::new();
         EncryptionType::RingAESGCM.to_bytes(&mut vec);
-        assert_eq! (1, vec.len());
+        assert_eq!(1, vec.len());
         assert_eq!(2, vec[0]);
 
-        assert_eq! (EncryptionType::None, EncryptionType::from_bytes(&mut Cursor::new(&[0])).unwrap());
+        assert_eq!(EncryptionType::None, EncryptionType::from_bytes(&mut Cursor::new(&[0])).unwrap());
         assert_eq!(EncryptionType::RingChachaPoly1305, EncryptionType::from_bytes(&mut Cursor::new(&[1])).unwrap());
-        assert_eq! (EncryptionType::RingAESGCM, EncryptionType::from_bytes(&mut Cursor::new(&[2])).unwrap());
+        assert_eq!(EncryptionType::RingAESGCM, EncryptionType::from_bytes(&mut Cursor::new(&[2])).unwrap());
 
-        assert_eq! (Some(ParseError::WrongValue(0, 42)), EncryptionType::from_bytes(&mut Cursor::new(&[42])).err());
+        assert_eq!(Some(ParseError::WrongValue(0, 42)), EncryptionType::from_bytes(&mut Cursor::new(&[42])).err());
     }
 
     #[test]
@@ -52,9 +48,9 @@ mod tests {
         let mut vec: Vec<u8> = Vec::new();
         EncryptionType::RingAESGCM.to_bytes(&mut vec);
         PasswordHashType::None.to_bytes(&mut vec);
-        assert_eq! (2, vec.len());
-        assert_eq! (2, vec[0]);
-        assert_eq! (0, vec[1]);
+        assert_eq!(2, vec.len());
+        assert_eq!(2, vec[0]);
+        assert_eq!(0, vec[1]);
     }
 
     #[test]
@@ -77,7 +73,7 @@ mod tests {
         expected.push(0x00);
 
         assert_eq!(expected.len(), result.len());
-        assert_eq! (expected, result);
+        assert_eq!(expected, result);
 
         let mut c = Cursor::new(result.as_slice());
         let reparsed = MainHeader::from_bytes(&mut c).unwrap();

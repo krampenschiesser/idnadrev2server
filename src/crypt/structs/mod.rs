@@ -9,7 +9,6 @@
 
 use std::fmt::{Display, Formatter};
 use ring_pwhash::scrypt::{scrypt, ScryptParams};
-use ring::constant_time::verify_slices_are_equal;
 use ring::aead::{AES_256_GCM, CHACHA20_POLY1305, Algorithm};
 use std::time::Instant;
 use chrono::Duration;
@@ -18,14 +17,19 @@ use std::fmt;
 use rand::{OsRng, Rng};
 use byteorder::{WriteBytesExt, LittleEndian};
 use self::serialize::*;
-use std::io::{Read, Write, Cursor};
+use std::io::Cursor;
 use super::error::ParseError;
-use dto::{FileId, EncryptionType, PasswordHashType};
+use dto::{EncryptionType, PasswordHashType};
 
 pub mod crypto;
 pub mod file;
 pub mod repository;
 pub mod serialize;
+
+pub use self::crypto::{DoubleHashedPw, HashedPw};
+pub use self::file::{EncryptedFile, FileHeader};
+pub use self::repository::{RepoHeader, Repository};
+pub use self::serialize::ByteSerialization;
 
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -269,8 +273,6 @@ impl ByteSerialization for MainHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
-    use super::crypto::*;
 
     #[test]
     fn enc_type() {

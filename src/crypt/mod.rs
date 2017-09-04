@@ -23,7 +23,6 @@ use dto::*;
 
 use std::path::PathBuf;
 use std::thread;
-use std::sync::mpsc::Sender;
 use dto::PlainPw;
 
 pub struct CryptoActor {
@@ -62,7 +61,7 @@ pub trait CryptoIfc {
 
 impl CryptoActor {
     pub fn new(folders: Vec<PathBuf>) -> Result<Self, CryptError> {
-        let mut state = State::new(folders)?;
+        let  state = State::new(folders)?;
 
 
         let (mut actor, control) = Actor::start(state, handle, CryptCmd::Shutdown);
@@ -392,7 +391,6 @@ mod tests {
     use super::*;
     use self::super::actor::function::tests::create_temp_repo;
     use tempdir::TempDir;
-    use std::time::Instant;
 
     #[test]
     fn test_full_process() {
@@ -404,7 +402,7 @@ mod tests {
         let repos = actor.list_repositories().unwrap();
         assert_eq!(1, repos.len());
 
-        let token = actor.open_repository(&repo_id, "name".to_string(), "password".as_bytes().to_vec()).unwrap();
+        let token = actor.open_repository(&repo_id, "name".to_string(), PlainPw::from("password")).unwrap();
         let files = actor.list_repository_files(&repo_id, &token).unwrap();
         assert_eq!(1, files.len());
 
@@ -441,7 +439,7 @@ mod tests {
         let temp = TempDir::new("temp_repo").unwrap();
 
         let actor = CryptoActor::new(vec![temp.path().to_path_buf()]).unwrap();
-        let repository = actor.create_repository("another repository", "bla".as_bytes().to_vec(), EncryptionType::RingAESGCM).unwrap();
+        let repository = actor.create_repository("another repository", PlainPw::from("bla"), EncryptionType::RingAESGCM).unwrap();
         let repo_id = repository.id;
         let token = repository.token;
 

@@ -10,7 +10,6 @@
 use dto::*;
 use super::super::util::io::path_to_str;
 use std::path::PathBuf;
-use uuid::Uuid;
 
 use std::fmt::{Display, Formatter};
 use std::fmt;

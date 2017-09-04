@@ -8,7 +8,6 @@
 // except according to those terms.
 
 use dto::{PlainPw, EncryptionType, PasswordHashType};
-use std::path::PathBuf;
 use ring::constant_time::verify_slices_are_equal;
 
 

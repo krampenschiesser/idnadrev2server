@@ -7,9 +7,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crypt::{CryptoActor, CryptoSender, CryptError};
+use crypt::{CryptoActor, CryptError};
 use std::path::{PathBuf, Path};
-use uuid::Uuid;
 use search::SearchCache;
 use crypt::CryptoIfc;
 use std::sync::RwLock;

@@ -1,10 +1,5 @@
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use serde_json;
-use crypt::{FileHeader, EncryptedFile};
-use crypt::{RepoHeader, Repository};
-use std::time::Instant;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display};
 use std::fmt;
 
 use rest_in_rust::*;
@@ -51,5 +46,11 @@ impl From<Uuid> for RepoId {
 impl AsRef<Uuid> for RepoId {
     fn as_ref(&self) -> &Uuid {
         &self.0
+    }
+}
+
+impl RepoId {
+    pub fn new(id: Uuid) -> Self {
+        RepoId(id)
     }
 }

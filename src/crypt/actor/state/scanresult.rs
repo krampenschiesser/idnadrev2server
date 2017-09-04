@@ -8,13 +8,12 @@
 // except according to those terms.
 
 use super::super::super::structs::repository::{Repository, RepoHeader};
-use super::super::super::structs::file::{FileHeader, EncryptedFile};
+use super::super::super::structs::file::{FileHeader};
 use super::super::super::error::CryptError;
 use super::super::super::util::io::path_to_str;
-use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent, RecommendedWatcher};
-use std::sync::mpsc::{channel, Receiver};
+use notify::{DebouncedEvent, RecommendedWatcher};
+use std::sync::mpsc::{ Receiver};
 use std::path::PathBuf;
-use uuid::Uuid;
 use std::collections::HashMap;
 use dto::{FileId,RepoId};
 

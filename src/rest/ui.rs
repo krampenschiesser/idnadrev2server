@@ -7,9 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::io;
-use std::path::{PathBuf, Path};
-use std::io::Cursor;
+use std::path::{PathBuf};
 use state::UiState;
 use rest_in_rust::*;
 

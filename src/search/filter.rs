@@ -15,10 +15,10 @@
 //!
 //! use rayon
 
-use super::searchparam::{TextFilter, FilterOperator, DateFilter, SearchFilter};
+use super::searchparam::{TextFilter, FilterOperator, DateFilter};
 use serde_json::Value;
 use distance::sift3;
-use chrono::{TimeZone, DateTime, Utc, Duration};
+use chrono::{DateTime, Utc};
 
 fn find_string(name: &str, input: &Value) -> Option<String> {
     match input {
@@ -136,6 +136,7 @@ mod tests {
     use super::*;
     use spectral::prelude::*;
     use super::super::searchparam::SearchFilter;
+    use chrono::{Duration,TimeZone};
 
     fn get_task() -> Value {
         json!({

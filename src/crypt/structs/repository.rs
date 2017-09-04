@@ -17,8 +17,7 @@ use super::super::util::io::path_to_str;
 use std::path::PathBuf;
 use std::fs::{copy, File};
 use std::io::{Read, Write, Cursor};
-use uuid::Uuid;
-use byteorder::{WriteBytesExt, LittleEndian};
+use byteorder::{WriteBytesExt};
 use super::serialize::*;
 use dto::PlainPw;
 
@@ -156,7 +155,7 @@ impl Repository {
         let mut buff = Vec::new();
         self.to_bytes(&mut buff);
 
-        let mut temp = TempFile::new();
+        let temp = TempFile::new();
         {
             let mut tempfile = File::create(temp.path.clone())?;
             tempfile.write(buff.as_slice())?;
