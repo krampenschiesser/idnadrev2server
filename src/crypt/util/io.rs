@@ -7,20 +7,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::error::{CryptError,ParseError};
+use super::super::error::{CryptError, ParseError};
 use super::super::structs::repository::{RepoHeader, Repository};
-use super::super::structs::file::{FileHeader};
+use super::super::structs::file::FileHeader;
 use super::super::structs::{MainHeader, FileVersion};
 use super::super::actor::state::scanresult::{ScanResult, CheckRes};
 use super::super::structs::serialize::ByteSerialization;
 use std::path::PathBuf;
-use std::fs::{File,DirEntry};
+use std::fs::{File, DirEntry};
 use std::time::Duration;
 use std::io::{Read, Cursor};
 use std::io;
 use notify::{Watcher, RecursiveMode, watcher};
-use std::sync::mpsc::{channel};
-use base64::{decode};
+use std::sync::mpsc::channel;
+use base64::decode;
 
 pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
     let (tx, rx) = channel();
@@ -30,7 +30,7 @@ pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
     }
     let check_results: Vec<CheckRes> = folders.into_iter().flat_map(|p| scan_folder(&p)).collect();
 
-    let mut s = ScanResult::new(watcher, rx,folders);
+    let mut s = ScanResult::new(watcher, rx, folders);
     for i in check_results {
         match i {
             CheckRes::Repo(_, p) => {
@@ -40,9 +40,9 @@ pub fn scan(folders: &Vec<PathBuf>) -> Result<ScanResult, CryptError> {
                 }
             }
             CheckRes::File(h, p) => {
-                s.add_file(h,p);
+                s.add_file(h, p);
             }
-            CheckRes::Error(e, p) => s.add_invalid(e,p),
+            CheckRes::Error(e, p) => s.add_invalid(e, p),
         };
     }
     Ok(s)
@@ -199,7 +199,7 @@ mod tests {
     use std::path::Path;
     use std::ffi::OsString;
     use std::fs::remove_file;
-    use super::super::super::structs::repository::{RepoHeader};
+    use super::super::super::structs::repository::RepoHeader;
     use std::io::Write;
     use base64::encode;
 
@@ -359,31 +359,46 @@ mod tests {
         {
             File::create(path.clone()).unwrap();
         }
-        #[cfg(target_os = "macos")]
-        {
-            let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
-            match change {
-                DebouncedEvent::Create(p) => {
-                    info!("Got {:?}", p);
+        let mut i = 1;
+        loop {
+            if i > 10 {
+                panic!("Didn't receive expected file creation");
+            }
+            let change = rx.recv_timeout(Duration::from_millis(100));
+            match change.unwrap() {
+                DebouncedEvent::Create(ref p) => {
+                    let original = unwrap_filename(&path);
+                    let new = unwrap_filename(p);
+                    if new == original {
+                        break;
+                    }
+                    eprintln!("received invalid notification {:?}", p);
                 }
-                _ => panic!("received invalid notification {:?}", &change)
+                c => eprintln!("received invalid notification {:?}", &c)
             }
-        }
-        let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
-        match change {
-            DebouncedEvent::Create(ref p) => {
-                assert_eq!(unwrap_filename(&path), unwrap_filename(p), "not the expected creation path. expected {:?} but got {:?}", unwrap_filename(&path), unwrap_filename(p));
-            }
-            _ => panic!("received invalid notification {:?}", &change)
+            i += 1;
         }
         remove_file(path.clone()).unwrap();
 
         let change = rx.recv_timeout(Duration::from_millis(100)).unwrap();
-        match change {
-            DebouncedEvent::NoticeRemove(ref p) => {
-                assert_eq!(unwrap_filename(&path), unwrap_filename(p), "not the expected deletion path. expected {:?} but got {:?}", unwrap_filename(&path), unwrap_filename(p));
+        i = 0;
+        loop {
+            if i > 10 {
+                panic!("Didn't receive expected file creation");
             }
-            _ => panic!("received invalid notification {:?}", &change)
+            let change = rx.recv_timeout(Duration::from_millis(100));
+            match change.unwrap() {
+                DebouncedEvent::NoticeRemove(ref p) => {
+                    let original = unwrap_filename(&path);
+                    let new = unwrap_filename(p);
+                    if new == original {
+                        break;
+                    }
+                    eprintln!("received invalid notification {:?}", p);
+                }
+                c => eprintln!("received invalid notification {:?}", &c)
+            }
+            i += 1;
         }
     }
 

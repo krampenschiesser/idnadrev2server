@@ -347,7 +347,7 @@ mod test {
         router.get("/rest/v1/repo", rest::list_repositories);
         router.post("/rest/v1/repo", rest::create_repository);
         router.post("/rest/v1/repo/:repo_id", rest::open_repository);
-        router.get("/rest/v1/repo/:repo_id/file", rest::create_file);
+        router.post("/rest/v1/repo/:repo_id/file", rest::create_file);
         router.get("/rest/v1/repo/:repo_id", rest::list_files);
         router.get("/rest/v1/repo/:repo_id/", rest::list_files);
         router.get("/rest/v1/repo/:repo_id/:type", rest::list_files);
@@ -367,7 +367,7 @@ mod test {
         let request = RequestBuilder::new().uri(uri).method(Method::GET).body(().into()).unwrap();
 
         let response = server.handle(request);
-        assert_eq!(StatusCode::OK, response.status());
+        assert_eq!(StatusCode::OK, response.status(), "{:?}", response);
         response.body().to_json().unwrap()
     }
 
@@ -378,7 +378,7 @@ mod test {
         let request = RequestBuilder::new().header(hv, hn).uri(uri).method(Method::GET).body(().into()).unwrap();
 
         let response = server.handle(request);
-        assert_eq!(StatusCode::OK, response.status());
+        assert_eq!(StatusCode::OK, response.status(), "{:?}", response);
         response.body().to_json().unwrap()
     }
 
@@ -411,7 +411,7 @@ mod test {
 
         let request = RequestBuilder::new().header(key, value).uri(uri).method(Method::POST).body(s.into()).unwrap();
         let response = server.handle(request);
-        assert_eq!(StatusCode::OK, response.status());
+        assert_eq!(StatusCode::OK, response.status(), "{:?}", response);
         response.body().to_json().unwrap()
     }
 
@@ -425,7 +425,7 @@ mod test {
         assert_that(&vec).has_length(1);
         let repo_id = vec[0].id;
         let cmd = OpenRepository { id: repo_id, user_name: "none".to_string(), password: vec![1, 2, 3] };
-        let response: Option<AccessToken> = post_ok(format!("/rest/v1/repo/{}/", repo_id).as_str(), &cmd, &server);
+        let response: Option<AccessToken> = post_ok(format!("/rest/v1/repo/{}", repo_id).as_str(), &cmd, &server);
         assert!(response.is_some(), format!("{:?}", response));
         (temp, server, repo_id.clone(), response.unwrap())
     }
@@ -447,11 +447,11 @@ mod test {
         let other_token = AccessToken::new();
 
         let uri = Uri::from_str(format!("/rest/v1/repo/{}/document", &repo_id).as_str()).unwrap();
-        let (hv, hn) = token.to_header();
+        let (hv, hn) = other_token.to_header();
         let request = RequestBuilder::new().header(hv, hn).uri(uri).method(Method::GET).body(().into()).unwrap();
 
         let response = server.handle(request);
-        assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+        assert_eq!(StatusCode::UNAUTHORIZED, response.status(), "{:?}", response);
     }
 
     #[test]
