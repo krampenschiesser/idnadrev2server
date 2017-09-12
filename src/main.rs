@@ -35,6 +35,7 @@ extern crate rayon;
 extern crate sha1;
 extern crate rest_in_rust;
 extern crate http;
+extern crate toml;
 
 #[cfg(test)]
 extern crate spectral;
@@ -46,9 +47,10 @@ pub mod rest;
 mod state;
 //mod dummy;
 mod actor;
+mod config;
 
-use std::path::{PathBuf};
-use state::GlobalState;
+use std::path::{Path, PathBuf};
+use state::{GlobalState, UiState};
 
 
 #[derive(Debug)]
@@ -84,13 +86,21 @@ fn main() {
     //        router.post("/repo/:repo_id/:file_id", rest::cors::create_file, "cors_create_file");
     //    }
 
+    let config = match config::read_config(Path::new("C:\\projects\\internal\\idnadrev2server\\idnadrev.toml")) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Could not read configuration file: '{}'", e);
+            return;
+        }
+    };
+
 
     let state = GlobalState::new(Vec::new()).unwrap();
-    let uidir = UiDir(PathBuf::new());
+    let ui_state = UiState::new(Path::new(config.ui_dir.as_str()).to_owned());
 
-    let addr = "127.0.0.1:8091".parse().unwrap();
+    let addr = "127.0.0.1:8000".parse().unwrap();
     let s = Server::new(addr, router);
     s.add_state(state);
-    s.add_state(uidir);
+    s.add_state(ui_state);
     s.start_http();
 }

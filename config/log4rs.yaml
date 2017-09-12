@@ -10,5 +10,7 @@
     appenders:
       - stdout
   loggers:
+    rest_in_rust:
+      level: trace
     idnadrev2rust:
       level: debug
