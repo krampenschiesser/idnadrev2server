@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use state::UiState;
 use rest_in_rust::*;
 
@@ -24,7 +24,7 @@ fn read_file_string(path: &PathBuf) -> Result<String, ::std::io::Error> {
     let mut val = String::new();
     match file.read_to_string(&mut val) {
         Ok(_) => Ok(val),
-        Err(e) => Err(Error::new(ErrorKind::Other, "Could not read file"))
+        Err(e) => Err(Error::new(ErrorKind::Other, format!("Could not read file {:?}", path)))
     }
 }
 
@@ -77,6 +77,7 @@ pub fn favicon(req: &mut Request) -> Result<Response, HttpError> {
 
 //#[get("/index.html")]
 pub fn index_html(req: &mut Request) -> Result<Response, HttpError> {
+    info!("reading index.html");
     read_single_file("index.html", req)
 }
 
