@@ -20,7 +20,7 @@ use super::super::error::{CryptError, ParseError};
 use crypt::structs::crypto::HashedPw;
 
 use std::error::Error;
-use log::LogLevel;
+use log::Level;
 use std::path::PathBuf;
 use std::fs::remove_file;
 
@@ -339,7 +339,7 @@ fn get_file(token: &AccessToken, file_descriptor: &FileDescriptor, state: &mut S
     }
 }
 
-fn unrecognized_file(msg: String, level: LogLevel) -> Result<CryptResponse, String> {
+fn unrecognized_file(msg: String, level: Level) -> Result<CryptResponse, String> {
     log!(level, "{}", msg);
     Ok(CryptResponse::UnrecognizedFile(msg))
 }
@@ -362,7 +362,7 @@ fn create_or_update_file(path: &PathBuf, state: &mut State, create: bool) -> Res
             }
         }
         Err(CryptError::ParseError(ParseError::NoPrefix)) => {
-            unrecognized_file(format!("Ignoring {}  because it has no matching prefix.", path_to_str(path)), LogLevel::Debug)
+            unrecognized_file(format!("Ignoring {}  because it has no matching prefix.", path_to_str(path)), Level::Debug)
         }
         Err(CryptError::ParseError(ParseError::InvalidFileVersion(file_version))) => {
             if file_version == FileVersion::RepositoryV1 {
@@ -381,13 +381,13 @@ fn create_or_update_file(path: &PathBuf, state: &mut State, create: bool) -> Res
                     _ => Ok(CryptResponse::UnrecognizedFile(path_to_str(path)))
                 }
             } else {
-                unrecognized_file(format!("Ignoring {} because it has an unkown file version.", path_to_str(path)), LogLevel::Warn)
+                unrecognized_file(format!("Ignoring {} because it has an unkown file version.", path_to_str(path)), Level::Warn)
             }
         }
         Err(CryptError::ParseError(ParseError::UnknownFileVersion(v))) => {
-            unrecognized_file(format!("Ignoring {} because it has an unkown file version {}.", path_to_str(path), v), LogLevel::Warn)
+            unrecognized_file(format!("Ignoring {} because it has an unkown file version {}.", path_to_str(path), v), Level::Warn)
         }
-        _ => unrecognized_file(format!("Ignoring {} because of general read error: {:?}", path_to_str(path), result), LogLevel::Error)
+        _ => unrecognized_file(format!("Ignoring {} because of general read error: {:?}", path_to_str(path), result), Level::Error)
     }
 }
 

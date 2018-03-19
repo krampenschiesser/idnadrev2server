@@ -69,7 +69,7 @@ fn main() {
     //        router.post("/repo/:repo_id/:file_id", rest::cors::create_file, "cors_create_file");
     //    }
 
-    let config = match config::read_config(Path::new("C:\\projects\\internal\\idnadrev2server\\idnadrev.toml")) {
+    let config = match config::read_config(Path::new("idnadrev.toml")) {
         Ok(c) => c,
         Err(e) => {
             error!("Could not read configuration file: '{}'", e);
@@ -92,14 +92,14 @@ fn main() {
     router.get("/rest/v1/repo/:repo_id/:type/", rest::list_files);
 
 
-    router.static_file_cached("/", path(&ui_state.ui_dir, "index.html"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
-    router.static_file_cached("/index.html", path(&ui_state.ui_dir, "index.html"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
+    router.static_path_cached("/", path(&ui_state.ui_dir, "index.html"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
+    router.static_path_cached("/index.html", path(&ui_state.ui_dir, "index.html"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
     router.get("/manifest.appcache", rest::ui::manifest);
-    router.static_file_cached("/asset-manifest.json", path(&ui_state.ui_dir, "asset-manifest.json"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
-    router.static_file_cached("/favicon.ico", path(&ui_state.ui_dir, "favicon.ico"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
-    router.static_folder_cached("/static", path(&ui_state.ui_dir, "static"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
-    router.static_folder_cached("/static/css", path(&ui_state.ui_dir, "static/css"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
-    router.static_folder_cached("/static/js", path(&ui_state.ui_dir, "static/js"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
+    router.static_path_cached("/asset-manifest.json", path(&ui_state.ui_dir, "asset-manifest.json"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
+    router.static_path_cached("/favicon.ico", path(&ui_state.ui_dir, "favicon.ico"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
+    router.static_path_cached("/static", path(&ui_state.ui_dir, "static"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
+    router.static_path_cached("/static/css", path(&ui_state.ui_dir, "static/css"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
+    router.static_path_cached("/static/js", path(&ui_state.ui_dir, "static/js"), ChangeDetection::FileInfoChange, EvictionPolicy::Never);
     router.get("/*any", rest::ui::any);
 
     let addr = "127.0.0.1:8000".parse().unwrap();
