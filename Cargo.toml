@@ -4,29 +4,28 @@ version = "0.1.0"
 authors = ["krampenschiesser <krampenschiesser@gmail.com>"]
 
 [dependencies]
-serde = "1.0.8"
-serde_json = "1.0.2"
-serde_derive = "1.0.8"
-rayon = "0.8.2"
-base64 = "0.5.2"
-ring = "0.9.7"
-ring-pwhash = "0.2.0"
-rand = "0.3.15"
-byteorder = { version = "1", features =["std"]}
-uuid = { version= "0.5.0", features = ["v4", "serde"]}
+serde = "1.0.33"
+serde_json = "1.0.12"
+serde_derive = "1.0.33"
+rayon = "1.0.1"
+base64 = "0.9.0"
+ring = "0.12.1"
+ring-pwhash = "0.12.0"
+rand = "0.4.2"
+byteorder = { version = "1.2.1", features =["std"]}
+uuid = { version= "0.6.1", features = ["v4", "serde"]}
 chrono = { version = "0.4.0", features = ["serde"] }
-tempdir= "0.3.5"
-notify = "4.0.1"
-log = "0.3.8"
-log4rs = "0.7.0"
+tempdir= "0.3.6"
+notify = "4.0.3"
+log = "0.4.1"
+log4rs = "0.8.0"
 distance = "0.4"
 needle = "0.1.1"
-thread_local = "0.3.3"
-sha1 = "0.2.0"
+thread_local = "0.3.5"
 
-reqwest = "0.7.1"
+reqwest = "0.8.5"
 rest_in_rust = {git = "https://github.com/krampenschiesser/rest_in_rust"}
-http = { git = 'https://github.com/carllerche/http' }
+http = "0.1.5"
 
 [dev-dependencies]
 spectral = "0.6.0"
