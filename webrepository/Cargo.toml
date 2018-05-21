@@ -1,0 +1,6 @@
+[package]
+name = "webrepository"
+version = "0.1.0"
+authors = ["krampenschiesser <krampenschiesser@gmail.com>"]
+
+[dependencies]

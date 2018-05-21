@@ -1,0 +1,43 @@
+syntax = "proto2";
+
+
+enum FileType {
+    Repository_V1 = 1;
+    File_V1 = 2;
+}
+
+enum EncryptionType {
+    ChachaPoly1305 = 1;
+}
+
+enum PasswordHashType {
+    SCrypt = 1;
+}
+
+message StoredFileWrapper {
+    required FileType type = 1;
+    required bytes content = 2;
+}
+
+message StoredRepositoryV1 {
+    required bytes id = 1;
+    required uint32 version = 2;
+    required bytes repository_id = 3;
+    required EncryptionType encType = 4;
+    required PasswordHashType hashType = 5;
+    required bytes salt = 6;
+    required bytes doubleHashedPw = 7;
+    required bytes filePw = 8;
+    required string name = 9;
+}
+
+message StoredFileV1 {
+    required bytes id = 1;
+    required uint32 version = 2;
+    required bytes repository_id = 3;
+    required EncryptionType encType = 4;
+    required bytes nonce_header = 5;
+    required bytes nonce_content = 6;
+    required string header = 7;
+    required bytes content = 8;
+}
