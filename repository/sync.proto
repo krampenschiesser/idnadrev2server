@@ -8,17 +8,21 @@ message SingleFileSync {
     required bytes hash = 3;
 }
 
-
 message SynchronizationBucket {
-    repeated SingleFileSync fileSync = 1;
+    repeated SingleFileSync file_syncs = 1;
 }
 
 message HashBucket {
     required bytes hash = 1;
-    repeated uint32 divisions = 2;
+    repeated Subdivision divisions = 2;
+}
+
+message Subdivision {
+    required uint32 division = 1;
+    required uint32 modulo = 2;
+    required uint32 remainder = 3;
 }
 
 message Synchronization {
     repeated HashBucket buckets = 1;
-    repeated uint32 divisions = 2;
 }
