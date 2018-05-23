@@ -105,6 +105,35 @@ impl<'a> From<&'a str> for PasswordHashType {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum CompressionType {
+    DeflateZip = 1,
+}
+
+impl Default for CompressionType {
+    fn default() -> Self {
+        CompressionType::DeflateZip
+    }
+}
+
+impl From<i32> for CompressionType {
+    fn from(i: i32) -> Self {
+        match i {
+            1 => CompressionType::DeflateZip,
+            _ => Self::default(),
+        }
+    }
+}
+
+impl<'a> From<&'a str> for CompressionType {
+    fn from(s: &'a str) -> Self {
+        match s {
+            "DeflateZip" => CompressionType::DeflateZip,
+            _ => Self::default(),
+        }
+    }
+}
+
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct StoredFileWrapper<'a> {
     pub type_pb: FileType,
@@ -149,7 +178,8 @@ pub struct StoredRepositoryV1<'a> {
     pub hash_type: PasswordHashType,
     pub salt: Cow<'a, [u8]>,
     pub double_hashed_pw: Cow<'a, [u8]>,
-    pub file_pw: Cow<'a, [u8]>,
+    pub nonce: Cow<'a, [u8]>,
+    pub encrypted_file_pw: Cow<'a, [u8]>,
     pub name: Cow<'a, str>,
 }
 
@@ -165,8 +195,9 @@ impl<'a> MessageRead<'a> for StoredRepositoryV1<'a> {
                 Ok(40) => msg.hash_type = r.read_enum(bytes)?,
                 Ok(50) => msg.salt = r.read_bytes(bytes).map(Cow::Borrowed)?,
                 Ok(58) => msg.double_hashed_pw = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(66) => msg.file_pw = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(74) => msg.name = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(66) => msg.nonce = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(74) => msg.encrypted_file_pw = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(82) => msg.name = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -185,7 +216,8 @@ impl<'a> MessageWrite for StoredRepositoryV1<'a> {
         + 1 + sizeof_varint(*(&self.hash_type) as u64)
         + 1 + sizeof_len((&self.salt).len())
         + 1 + sizeof_len((&self.double_hashed_pw).len())
-        + 1 + sizeof_len((&self.file_pw).len())
+        + 1 + sizeof_len((&self.nonce).len())
+        + 1 + sizeof_len((&self.encrypted_file_pw).len())
         + 1 + sizeof_len((&self.name).len())
     }
 
@@ -197,8 +229,9 @@ impl<'a> MessageWrite for StoredRepositoryV1<'a> {
         w.write_with_tag(40, |w| w.write_enum(*&self.hash_type as i32))?;
         w.write_with_tag(50, |w| w.write_bytes(&**&self.salt))?;
         w.write_with_tag(58, |w| w.write_bytes(&**&self.double_hashed_pw))?;
-        w.write_with_tag(66, |w| w.write_bytes(&**&self.file_pw))?;
-        w.write_with_tag(74, |w| w.write_string(&**&self.name))?;
+        w.write_with_tag(66, |w| w.write_bytes(&**&self.nonce))?;
+        w.write_with_tag(74, |w| w.write_bytes(&**&self.encrypted_file_pw))?;
+        w.write_with_tag(82, |w| w.write_string(&**&self.name))?;
         Ok(())
     }
 }
@@ -208,11 +241,12 @@ pub struct StoredFileV1<'a> {
     pub id: Cow<'a, [u8]>,
     pub version: u32,
     pub repository_id: Cow<'a, [u8]>,
-    pub enc_type: EncryptionType,
+    pub encryption_type: EncryptionType,
+    pub compression_type: CompressionType,
     pub nonce_header: Cow<'a, [u8]>,
     pub nonce_content: Cow<'a, [u8]>,
-    pub header: Cow<'a, str>,
-    pub content: Cow<'a, [u8]>,
+    pub encrypted_header: Cow<'a, [u8]>,
+    pub encrypted_content: Cow<'a, [u8]>,
 }
 
 impl<'a> MessageRead<'a> for StoredFileV1<'a> {
@@ -223,11 +257,12 @@ impl<'a> MessageRead<'a> for StoredFileV1<'a> {
                 Ok(10) => msg.id = r.read_bytes(bytes).map(Cow::Borrowed)?,
                 Ok(16) => msg.version = r.read_uint32(bytes)?,
                 Ok(26) => msg.repository_id = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(32) => msg.enc_type = r.read_enum(bytes)?,
-                Ok(42) => msg.nonce_header = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(50) => msg.nonce_content = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(58) => msg.header = r.read_string(bytes).map(Cow::Borrowed)?,
-                Ok(66) => msg.content = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(32) => msg.encryption_type = r.read_enum(bytes)?,
+                Ok(40) => msg.compression_type = r.read_enum(bytes)?,
+                Ok(50) => msg.nonce_header = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(58) => msg.nonce_content = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(66) => msg.encrypted_header = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(74) => msg.encrypted_content = r.read_bytes(bytes).map(Cow::Borrowed)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -242,22 +277,24 @@ impl<'a> MessageWrite for StoredFileV1<'a> {
         + 1 + sizeof_len((&self.id).len())
         + 1 + sizeof_varint(*(&self.version) as u64)
         + 1 + sizeof_len((&self.repository_id).len())
-        + 1 + sizeof_varint(*(&self.enc_type) as u64)
+        + 1 + sizeof_varint(*(&self.encryption_type) as u64)
+        + 1 + sizeof_varint(*(&self.compression_type) as u64)
         + 1 + sizeof_len((&self.nonce_header).len())
         + 1 + sizeof_len((&self.nonce_content).len())
-        + 1 + sizeof_len((&self.header).len())
-        + 1 + sizeof_len((&self.content).len())
+        + 1 + sizeof_len((&self.encrypted_header).len())
+        + 1 + sizeof_len((&self.encrypted_content).len())
     }
 
     fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(10, |w| w.write_bytes(&**&self.id))?;
         w.write_with_tag(16, |w| w.write_uint32(*&self.version))?;
         w.write_with_tag(26, |w| w.write_bytes(&**&self.repository_id))?;
-        w.write_with_tag(32, |w| w.write_enum(*&self.enc_type as i32))?;
-        w.write_with_tag(42, |w| w.write_bytes(&**&self.nonce_header))?;
-        w.write_with_tag(50, |w| w.write_bytes(&**&self.nonce_content))?;
-        w.write_with_tag(58, |w| w.write_string(&**&self.header))?;
-        w.write_with_tag(66, |w| w.write_bytes(&**&self.content))?;
+        w.write_with_tag(32, |w| w.write_enum(*&self.encryption_type as i32))?;
+        w.write_with_tag(40, |w| w.write_enum(*&self.compression_type as i32))?;
+        w.write_with_tag(50, |w| w.write_bytes(&**&self.nonce_header))?;
+        w.write_with_tag(58, |w| w.write_bytes(&**&self.nonce_content))?;
+        w.write_with_tag(66, |w| w.write_bytes(&**&self.encrypted_header))?;
+        w.write_with_tag(74, |w| w.write_bytes(&**&self.encrypted_content))?;
         Ok(())
     }
 }

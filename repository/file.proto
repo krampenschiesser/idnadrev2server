@@ -14,6 +14,10 @@ enum PasswordHashType {
     SCrypt = 1;
 }
 
+enum CompressionType {
+    DeflateZip = 1;
+}
+
 message StoredFileWrapper {
     required FileType type = 1;
     required bytes content = 2;
@@ -36,9 +40,10 @@ message StoredFileV1 {
     required bytes id = 1;
     required uint32 version = 2;
     required bytes repository_id = 3;
-    required EncryptionType enc_type = 4;
-    required bytes nonce_header = 5;
-    required bytes nonce_content = 6;
-    required bytes encrypted_header = 7;
-    required bytes encrypted_content = 8;
+    required EncryptionType encryption_type = 4;
+    required CompressionType compression_type = 5;
+    required bytes nonce_header = 6;
+    required bytes nonce_content = 7;
+    required bytes encrypted_header = 8;
+    required bytes encrypted_content = 9;
 }
