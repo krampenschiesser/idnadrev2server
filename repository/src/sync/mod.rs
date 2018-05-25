@@ -57,8 +57,9 @@ fn create_buckets<'a, 'b>(files: &'b [&'a RepositoryFile], max_bucket_size: usiz
 
     let mut buckets = Vec::new();
     let mut map: HashMap<u8, HashBucket<'a>> = HashMap::new();
+    let modulo = files.len() / max_bucket_size + 1;
 
-    let current_division = divisions.last().map(|d| Subdivision { division: d.division + 1, remainder: 0, modulo: 10 }).unwrap_or(Subdivision { division: 1, remainder: 0, modulo: 10 });
+    let current_division = divisions.last().map(|d| Subdivision { division: d.division + 1, remainder: 0, modulo: modulo as u8 }).unwrap_or(Subdivision { division: 1, remainder: 0, modulo: modulo as u8 });
 
 
     for file in files.iter() {
@@ -92,7 +93,7 @@ mod test {
 
     #[test]
     fn test_create_buckets() {
-        let files: Vec<RepositoryFile> = (0..200_u16).map(|n| create_random_file()).collect();
+        let files: Vec<RepositoryFile> = (0..2000_u16).map(|n| create_random_file()).collect();
         let reference: Vec<&RepositoryFile> = files.iter().collect();
 
         let buckets = HashBucket {
@@ -103,6 +104,8 @@ mod test {
         println!("Got bucket len {}", buckets.len());
         buckets.iter().for_each(|b| {
             println!("File len {}", b.files.len());
+            print!("divisions: {:?}", b.divisions);
+            assert!(b.hash.len() > 0);
         });
         assert!(buckets.len() > 1);
     }
