@@ -5,7 +5,7 @@ extern crate quick_protobuf;
 extern crate failure;
 extern crate uuid;
 extern crate chacha20_poly1305_aead;
-
+extern crate sha1;
 
 mod pb;
 mod files;

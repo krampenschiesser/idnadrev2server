@@ -8,11 +8,12 @@ use ::crypt::{CipherTextVec,Nonce};
 pub type FileId = Uuid;
 pub type FileVersion = u32;
 
+#[derive(Debug)]
 pub struct RepositoryFile {
-    id: FileId,
-    version: FileVersion,
-    repository_id: RepositoryId,
-    file_name: StoredFileName,
-    encryption_type: EncryptionType,
-    compression_type: CompressionType,
+    pub id: FileId,
+    pub version: FileVersion,
+    pub repository_id: RepositoryId,
+    pub file_name: StoredFileName,
+    pub encryption_type: EncryptionType,
+    pub compression_type: CompressionType,
 }
