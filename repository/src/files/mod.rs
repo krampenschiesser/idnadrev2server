@@ -9,5 +9,7 @@ pub trait FileSource {
 
     fn get_file_content(&self, name: &str) -> Result<Vec<u8>, Error>;
 
+    fn peek_file_content(&self, name: &str, len: usize) -> Result<Vec<u8>, Error>;
+
     fn store_file(&mut self, file_name: &str, data: &[u8]) -> Result<(), Error>;
 }

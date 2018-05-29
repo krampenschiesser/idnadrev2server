@@ -11,7 +11,7 @@ enum EncryptionType {
 }
 
 enum PasswordHashType {
-    SCrypt = 1;
+    Argon2i = 1;
 }
 
 enum CompressionType {

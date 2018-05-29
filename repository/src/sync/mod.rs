@@ -54,6 +54,7 @@ impl<'a> HashBucket<'a> {
 
 fn create_buckets<'a, 'b>(files: &'b [&'a RepositoryFile], max_bucket_size: usize, divisions: Vec<Subdivision>) -> Vec<HashBucket<'a>> {
     use std::collections::HashMap;
+    use sha1::{Sha1, Digest};
 
     let mut buckets = Vec::new();
     let mut map: HashMap<u8, HashBucket<'a>> = HashMap::new();
@@ -79,7 +80,16 @@ fn create_buckets<'a, 'b>(files: &'b [&'a RepositoryFile], max_bucket_size: usiz
         }).files.push(file);
     }
 
-    for (key, value) in map.into_iter() {
+    for (key, mut value) in map.into_iter() {
+        let mut sha1 = Sha1::default();
+        value.files.iter().for_each(|f| {
+            sha1.input(f.id.as_bytes());
+
+            let bytes: [u8; 4] = unsafe { ::std::mem::transmute(f.version.to_le()) };
+            sha1.input(&bytes);
+        });
+        let hash = sha1.result().to_vec();
+        value.hash = hash;
         buckets.push(value);
     }
 
@@ -103,8 +113,7 @@ mod test {
         }.split(100);
         println!("Got bucket len {}", buckets.len());
         buckets.iter().for_each(|b| {
-            println!("File len {}", b.files.len());
-            print!("divisions: {:?}", b.divisions);
+            println!("divisions: {:?}, File len {}", b.divisions, b.files.len());
             assert!(b.hash.len() > 0);
         });
         assert!(buckets.len() > 1);

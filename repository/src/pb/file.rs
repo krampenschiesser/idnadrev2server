@@ -78,19 +78,19 @@ impl<'a> From<&'a str> for EncryptionType {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PasswordHashType {
-    SCrypt = 1,
+    Argon2i = 1,
 }
 
 impl Default for PasswordHashType {
     fn default() -> Self {
-        PasswordHashType::SCrypt
+        PasswordHashType::Argon2i
     }
 }
 
 impl From<i32> for PasswordHashType {
     fn from(i: i32) -> Self {
         match i {
-            1 => PasswordHashType::SCrypt,
+            1 => PasswordHashType::Argon2i,
             _ => Self::default(),
         }
     }
@@ -99,7 +99,7 @@ impl From<i32> for PasswordHashType {
 impl<'a> From<&'a str> for PasswordHashType {
     fn from(s: &'a str) -> Self {
         match s {
-            "SCrypt" => PasswordHashType::SCrypt,
+            "Argon2i" => PasswordHashType::Argon2i,
             _ => Self::default(),
         }
     }
