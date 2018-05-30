@@ -1,5 +1,6 @@
 #![feature(try_from)]
 #![feature(universal_impl_trait)]
+#![feature(slice_concat_ext)]
 
 extern crate argon2rs;
 extern crate chacha20_poly1305_aead;

@@ -26,14 +26,13 @@ message StoredFileWrapper {
 message StoredRepositoryV1 {
     required bytes id = 1;
     required uint32 version = 2;
-    required bytes repository_id = 3;
-    required EncryptionType enc_type = 4;
-    required PasswordHashType hash_type = 5;
-    required bytes salt = 6;
-    required bytes double_hashed_pw = 7;
-    required bytes nonce = 8;
-    required bytes encrypted_file_pw = 9;
-    required string name = 10;
+    required EncryptionType enc_type = 3;
+    required PasswordHashType hash_type = 4;
+    required bytes salt = 5;
+    required bytes double_hashed_pw = 6;
+    required bytes nonce = 7;
+    required bytes encrypted_file_pw = 8;
+    required string name = 9;
 }
 
 message StoredFileV1 {

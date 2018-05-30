@@ -173,7 +173,6 @@ impl<'a> MessageWrite for StoredFileWrapper<'a> {
 pub struct StoredRepositoryV1<'a> {
     pub id: Cow<'a, [u8]>,
     pub version: u32,
-    pub repository_id: Cow<'a, [u8]>,
     pub enc_type: EncryptionType,
     pub hash_type: PasswordHashType,
     pub salt: Cow<'a, [u8]>,
@@ -190,14 +189,13 @@ impl<'a> MessageRead<'a> for StoredRepositoryV1<'a> {
             match r.next_tag(bytes) {
                 Ok(10) => msg.id = r.read_bytes(bytes).map(Cow::Borrowed)?,
                 Ok(16) => msg.version = r.read_uint32(bytes)?,
-                Ok(26) => msg.repository_id = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(32) => msg.enc_type = r.read_enum(bytes)?,
-                Ok(40) => msg.hash_type = r.read_enum(bytes)?,
-                Ok(50) => msg.salt = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(58) => msg.double_hashed_pw = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(66) => msg.nonce = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(74) => msg.encrypted_file_pw = r.read_bytes(bytes).map(Cow::Borrowed)?,
-                Ok(82) => msg.name = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(24) => msg.enc_type = r.read_enum(bytes)?,
+                Ok(32) => msg.hash_type = r.read_enum(bytes)?,
+                Ok(42) => msg.salt = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(50) => msg.double_hashed_pw = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(58) => msg.nonce = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(66) => msg.encrypted_file_pw = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(74) => msg.name = r.read_string(bytes).map(Cow::Borrowed)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -211,7 +209,6 @@ impl<'a> MessageWrite for StoredRepositoryV1<'a> {
         0
         + 1 + sizeof_len((&self.id).len())
         + 1 + sizeof_varint(*(&self.version) as u64)
-        + 1 + sizeof_len((&self.repository_id).len())
         + 1 + sizeof_varint(*(&self.enc_type) as u64)
         + 1 + sizeof_varint(*(&self.hash_type) as u64)
         + 1 + sizeof_len((&self.salt).len())
@@ -224,14 +221,13 @@ impl<'a> MessageWrite for StoredRepositoryV1<'a> {
     fn write_message<W: Write>(&self, w: &mut Writer<W>) -> Result<()> {
         w.write_with_tag(10, |w| w.write_bytes(&**&self.id))?;
         w.write_with_tag(16, |w| w.write_uint32(*&self.version))?;
-        w.write_with_tag(26, |w| w.write_bytes(&**&self.repository_id))?;
-        w.write_with_tag(32, |w| w.write_enum(*&self.enc_type as i32))?;
-        w.write_with_tag(40, |w| w.write_enum(*&self.hash_type as i32))?;
-        w.write_with_tag(50, |w| w.write_bytes(&**&self.salt))?;
-        w.write_with_tag(58, |w| w.write_bytes(&**&self.double_hashed_pw))?;
-        w.write_with_tag(66, |w| w.write_bytes(&**&self.nonce))?;
-        w.write_with_tag(74, |w| w.write_bytes(&**&self.encrypted_file_pw))?;
-        w.write_with_tag(82, |w| w.write_string(&**&self.name))?;
+        w.write_with_tag(24, |w| w.write_enum(*&self.enc_type as i32))?;
+        w.write_with_tag(32, |w| w.write_enum(*&self.hash_type as i32))?;
+        w.write_with_tag(42, |w| w.write_bytes(&**&self.salt))?;
+        w.write_with_tag(50, |w| w.write_bytes(&**&self.double_hashed_pw))?;
+        w.write_with_tag(58, |w| w.write_bytes(&**&self.nonce))?;
+        w.write_with_tag(66, |w| w.write_bytes(&**&self.encrypted_file_pw))?;
+        w.write_with_tag(74, |w| w.write_string(&**&self.name))?;
         Ok(())
     }
 }
