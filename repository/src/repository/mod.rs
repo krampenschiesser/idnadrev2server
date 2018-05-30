@@ -85,8 +85,19 @@ mod test {
 
         fn get_file_content(&self, name: &str) -> Result<Vec<u8>, Error> {
             use quick_protobuf::Writer;
+            use std::borrow::Cow;
 
             let message = get_repo();
+            let mut out = Vec::new();
+            {
+                let mut writer = Writer::new(&mut out);
+                writer.write_message(&message)?;
+            }
+
+            let message = StoredFileWrapper {
+                type_pb: FileType::RepositoryV1,
+                content: Cow::from(out)
+            };
             let mut out = Vec::new();
             {
                 let mut writer = Writer::new(&mut out);
